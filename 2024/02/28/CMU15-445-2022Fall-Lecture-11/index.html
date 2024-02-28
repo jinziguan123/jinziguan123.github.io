@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+  <link rel="stylesheet" href="/lib/pace/pace-theme-flash.min.css">
+  <script src="/lib/pace/pace.min.js"></script>
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"example.com","root":"/","scheme":"Muse","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="Lecture 11: Join Algorithms本章介绍了join算法的思想和实现 Join Operator 首先是join在底层是如何实现的：这里有两种方式 例如对于MySql语句：select R.id, S.date from R join S on R.id &#x3D; S.id where S.value &gt; 100  Early Materialization： 这种方法一开始就">
+<meta property="og:type" content="article">
+<meta property="og:title" content="CMU15-445 2022Fall Lecture 11">
+<meta property="og:url" content="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-11/index.html">
+<meta property="og:site_name" content="CigaCase">
+<meta property="og:description" content="Lecture 11: Join Algorithms本章介绍了join算法的思想和实现 Join Operator 首先是join在底层是如何实现的：这里有两种方式 例如对于MySql语句：select R.id, S.date from R join S on R.id &#x3D; S.id where S.value &gt; 100  Early Materialization： 这种方法一开始就">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2024-02-28T04:27:51.000Z">
+<meta property="article:modified_time" content="2024-02-28T04:27:56.540Z">
+<meta property="article:author" content="愚者大人的铁质卷烟盒">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-11/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-CN'
+  };
+</script>
+
+  <title>CMU15-445 2022Fall Lecture 11 | CigaCase</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">CigaCase</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-11/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/NiJiKa.GIF">
+      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
+      <meta itemprop="description" content="琐碎和思考的堆放处">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="CigaCase">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          CMU15-445 2022Fall Lecture 11
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2024-02-28 12:27:51 / 修改时间：12:27:56" itemprop="dateCreated datePublished" datetime="2024-02-28T12:27:51+08:00">2024-02-28</time>
+            </span>
+
+          
+            <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv" style="display: none;">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-eye"></i>
+              </span>
+              <span class="post-meta-item-text">阅读次数：</span>
+              <span id="busuanzi_value_page_pv"></span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h1 id="Lecture-11-Join-Algorithms"><a href="#Lecture-11-Join-Algorithms" class="headerlink" title="Lecture 11: Join Algorithms"></a>Lecture 11: Join Algorithms</h1><p>本章介绍了join算法的思想和实现</p>
+<h1 id="Join-Operator"><a href="#Join-Operator" class="headerlink" title="Join Operator"></a>Join Operator</h1><ul>
+<li><p>首先是join在底层是如何实现的：这里有两种方式</p>
+<p>例如对于MySql语句：<code>select R.id, S.date from R join S on R.id = S.id where S.value &gt; 100</code></p>
+<ul>
+<li><p>Early Materialization：</p>
+<p>这种方法一开始就将所有我们需要用到的具体数据都读取好放入内存，详细一点来讲就是把R.id和S.data直接作为新的tuple插入表中，这样一来，该查询的所有后续操作都不用再回到磁盘中读取数据</p>
+</li>
+<li><p>Late Materialization：</p>
+<p>与前者相对的，滞后具象方法在一开始只会将匹配到的tuple的Record IDS放入表中，等到上层的操作需要获取数据的时候再去磁盘中拿。这种方法对于列存储的DBMS比较友好，因为最终除了我们需要的数据以外，我们不会读取到任何无关的数据</p>
+</li>
+</ul>
+</li>
+</ul>
+<h1 id="Join-vs-Cross-Product"><a href="#Join-vs-Cross-Product" class="headerlink" title="Join vs. Cross-Product"></a>Join vs. Cross-Product</h1><p>这里需要进行一下连接操作与笛卡尔积之间的比较：</p>
+<p>相对而言笛卡尔积是一种更加低效的方法，因为对于两张大小分别为m和n的表，一次笛卡尔积操作需要用两个for循环来遍历两张表，最终获得一张m*n大小的输出表</p>
+<blockquote>
+<p>例如<code>select * from s cross join e</code>就是一个笛卡尔积操作，最终输出的结果一来没有规律可言，而来耗费时间更长</p>
+<p>而<code>select * from s join e on s.id = e.id</code>是一个join操作，输出结果明显会更小更快</p>
+</blockquote>
+<h1 id="Join-Algorithms"><a href="#Join-Algorithms" class="headerlink" title="Join Algorithms"></a>Join Algorithms</h1><h2 id="Nested-Loop-Join"><a href="#Nested-Loop-Join" class="headerlink" title="Nested Loop Join"></a>Nested Loop Join</h2><h3 id="Naive-Nested-Loop-Join"><a href="#Naive-Nested-Loop-Join" class="headerlink" title="Naive Nested Loop Join"></a>Naive Nested Loop Join</h3><ul>
+<li><p>这是最简单的join算法，遍历两个表中的所有tuple，如果两两匹配，则输出</p>
+</li>
+<li><p>显然这是一个糟糕的算法，如果R表有M个page、m个tuple，S表有N个page、n个tuple，则对于一次join，开销将会是$$M + (m \times N)$$</p>
+<blockquote>
+<p>例如R有1000页，100000个tuple；S有500页，40000个tuple</p>
+<p>那么做一次join的IO次数为：$$1000 + (100000 \times 500) &#x3D; 50001000$$次</p>
+<p>如果一次IO要0.1ms，那么join一次就要将近1.3小时</p>
+<p>即使使用大小比较小的S表作为outer loop的主体，最终也要近乎1.1小时</p>
+</blockquote>
+</li>
+</ul>
+<h3 id="Block-Nested-Loop-Join"><a href="#Block-Nested-Loop-Join" class="headerlink" title="Block Nested Loop Join"></a>Block Nested Loop Join</h3><p>朴素的循环算法没有充分利用缓冲池，由此引出了块嵌套循环</p>
+<ul>
+<li><p>假设我们缓冲区大小为B，则我们使用B-2个缓冲区用来装载外表（即外侧遍历的表），用一个缓冲区装载内表，最后一个缓冲区用来输出，写成伪代码如下：</p>
+<blockquote>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> each page pR(Belong to R) <span class="keyword">in</span> <span class="built_in">range</span>(B-<span class="number">2</span>):</span><br><span class="line">	<span class="keyword">for</span> each page pS(Belong to S) <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">1</span>):</span><br><span class="line">		<span class="keyword">for</span> each <span class="built_in">tuple</span> r <span class="keyword">in</span> pR:</span><br><span class="line">		<span class="keyword">for</span> each <span class="built_in">tuple</span> s <span class="keyword">in</span> pS:</span><br><span class="line">  		<span class="keyword">if</span> r matches s then emit</span><br></pre></td></tr></table></figure>
+</blockquote>
+</li>
+<li><p>这个算法的IO复杂度为$$M + \lceil M &#x2F; (B-2) \rceil \times N$$</p>
+<blockquote>
+<p><strong>如果外循环可以完全装入内存：</strong></p>
+<p>加入一次IO要0.1ms，那么总时长只要0.15秒</p>
+</blockquote>
+</li>
+</ul>
+<h3 id="Index-Nested-Join-Loop"><a href="#Index-Nested-Join-Loop" class="headerlink" title="Index Nested Join Loop"></a>Index Nested Join Loop</h3><p>上述两种算法，性能瓶颈在于：对于外循环中的每一个tuple，都需要遍历一次内循环中的tuple来进行判断，因此我们可以使用索引进行优化</p>
+<ul>
+<li>具体做法为：在关系S的连接属性上建立索引，对于R中的每一个元组，根据索引找到对应的S中元组进行连接</li>
+<li>假设在索引上查找的代价为C，则IO复杂度为：$$M + m \times C$$</li>
+</ul>
+<h2 id="Sort-Merge-Join"><a href="#Sort-Merge-Join" class="headerlink" title="Sort-Merge Join"></a>Sort-Merge Join</h2><p>如果我们手上的两张表都是有序的，那么join工作就会简单很多；如果他们不是有序的，那就可以考虑使用上节课讲到的排序算法让他们变得有序</p>
+<ul>
+<li><p>具体流程如下：</p>
+<ul>
+<li><p>Phase #1: Sort</p>
+<ul>
+<li><p>对两张表以join所使用到的key作为关键字进行排序</p>
+</li>
+<li><p>如果内存放不下这么多page，则需要使用外部排序</p>
+</li>
+</ul>
+</li>
+<li><p>Phase #2: Merge</p>
+<ul>
+<li>对两张排好序的表进行配对，这样外循环的元素就不用每次都遍历一遍内循环的元素了</li>
+<li>可能会需要根据join的类型进行回溯，这里具体</li>
+</ul>
+<blockquote>
+<p>比如表R：</p>
+<table>
+<thead>
+<tr>
+<th>id</th>
+<th>name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>100</td>
+<td>Andy</td>
+</tr>
+<tr>
+<td>200</td>
+<td>GZA</td>
+</tr>
+<tr>
+<td>200</td>
+<td>GZA</td>
+</tr>
+</tbody></table>
+<p>表S：</p>
+<table>
+<thead>
+<tr>
+<th>id</th>
+<th>value</th>
+<th>cdate</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>100</td>
+<td>2222</td>
+<td>10&#x2F;4&#x2F;2023</td>
+</tr>
+<tr>
+<td>100</td>
+<td>9999</td>
+<td>10&#x2F;4&#x2F;2023</td>
+</tr>
+<tr>
+<td>200</td>
+<td>8888</td>
+<td>10&#x2F;4&#x2F;2023</td>
+</tr>
+<tr>
+<td>400</td>
+<td>7777</td>
+<td>10&#x2F;4&#x2F;2023</td>
+</tr>
+</tbody></table>
+<p>当R表遍历到第二行，而S表遍历到第三行时，会输出这组tuple，S表的指针会向下移动到第四行，此时发现R表中仍然有id&#x3D;200的tuple存在，则需要进行回溯，将指针退回第三行</p>
+</blockquote>
+</li>
+</ul>
+</li>
+<li><p>IO开销如下：</p>
+<blockquote>
+<p>Sort Cost(R) : $$2M \times (1 + \lceil log_{B-1}{\lceil M &#x2F; B \rceil} \rceil)$$</p>
+<p>Sort Cost(S) : $$2N \times (1 + \lceil log_{B-1}{\lceil N &#x2F; B \rceil} \rceil)$$</p>
+<p>Merge Cost : $$M + N$$</p>
+<p>-&gt;Total Cost : Sort + Merge</p>
+<p>例如R有1000页，100000个tuple；S有500页，40000个tuple</p>
+<p>则一共需要IO次数7500次，如果每次IO需要0.1ms，则一共需要0.75s</p>
+</blockquote>
+</li>
+<li><p>排序join算法的最坏情况为：如果两张表的所有tuple都一模一样，那么回溯的次数将会大大增加，开销会来到$$(M \times N) + (sort cost)$$</p>
+</li>
+</ul>
+<h2 id="Hash-Join"><a href="#Hash-Join" class="headerlink" title="Hash Join"></a>Hash Join</h2><ul>
+<li><p>哈希join算法也有两个阶段：</p>
+<ul>
+<li><p>Phase #1: Build</p>
+<p>首先使用哈希函数h1扫描外层表来获取一张哈希表，其中哈希方式可以任选，只不过在实际应用中，线性探查法是效果最好的</p>
+</li>
+<li><p>Phase #2: Probe</p>
+<p>扫描内层表并且使用哈希函数h1来跳转并且寻找匹配的tuple</p>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="Hash-Table-Contents"><a href="#Hash-Table-Contents" class="headerlink" title="Hash Table Contents"></a>Hash Table Contents</h3><p>对于一张哈希表，我们不仅仅要记录哈希值，还要记录对应的key，以防发生冲突时形成错误的match</p>
+<p>此外，有些DBMS还会记录下来tuple的value，这取决于其使用的策略是一开始所提到的Early Materialization 还是Later Materialization</p>
+<h3 id="Optimization-Probe-Filter"><a href="#Optimization-Probe-Filter" class="headerlink" title="Optimization : Probe Filter"></a>Optimization : Probe Filter</h3><p>对于Hash Join的一种常见的优化方式是使用Bloom Filter。这是一种概率性的数据结构，存放在CPU的cache中，Bloom Filter会在创建哈希表的时候判断：这个key是否存在于内层表中，他可能会将不存在误判为存在，但不会将存在的key误判为不存在</p>
+<p>这样一来，当我们想要进入哈希表进行查找的时候，我们可以首先访问一下Bloom Filter，可以加快join的速度</p>
+<h3 id="Partition-Hash-Join"><a href="#Partition-Hash-Join" class="headerlink" title="Partition Hash Join"></a>Partition Hash Join</h3><ul>
+<li><p>有的时候哈希表没有办法装进内存，这个时候我们可以使用聚类哈希join，大概意思就是在build之前就先对输入的relation进行分类，然后针对每一个partition进行前面提到的hash join算法</p>
+</li>
+<li><p>Recursive Partition: 关于这一部分其实有点没太看懂，好像是说要用两个哈希函数来对两个表分别进行递归聚类，然后看tuple是否匹配（？）</p>
+</li>
+<li><p>IO开销如下：</p>
+<blockquote>
+<p>如果我们不使用递归聚类，那么</p>
+<p>Partition Phase: $$2(M+N)$$次IO</p>
+<p>Probe Phase: $$M+N$$次IO</p>
+</blockquote>
+</li>
+</ul>
+<h4 id="Optimization-Hybrid-Hash-Join"><a href="#Optimization-Hybrid-Hash-Join" class="headerlink" title="Optimization : Hybrid Hash Join"></a>Optimization : Hybrid Hash Join</h4><p>如果一个表中的key是skewed的（大概意思就是这个key在这个表中非常多），那么DBMS会将这个partition视作热点分区，将其保存在内存而非写回磁盘</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2024/02/28/CMU15-445-2022Fall-Lecture-10/" rel="prev" title="CMU15-445 2022Fall Lecture 10">
+      <i class="fa fa-chevron-left"></i> CMU15-445 2022Fall Lecture 10
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2024/02/28/CMU15-445-2022Fall-Lecture-12-13/" rel="next" title="CMU15-445 2022Fall Lecture 12.13">
+      CMU15-445 2022Fall Lecture 12.13 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+    
+  <div class="comments">
+    <div id="lv-container" data-id="city" data-uid="MTAyMC81ODU4MS8zNTA0Mw=="></div>
+  </div>
+  
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Lecture-11-Join-Algorithms"><span class="nav-number">1.</span> <span class="nav-text">Lecture 11: Join Algorithms</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Join-Operator"><span class="nav-number">2.</span> <span class="nav-text">Join Operator</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Join-vs-Cross-Product"><span class="nav-number">3.</span> <span class="nav-text">Join vs. Cross-Product</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Join-Algorithms"><span class="nav-number">4.</span> <span class="nav-text">Join Algorithms</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Nested-Loop-Join"><span class="nav-number">4.1.</span> <span class="nav-text">Nested Loop Join</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Naive-Nested-Loop-Join"><span class="nav-number">4.1.1.</span> <span class="nav-text">Naive Nested Loop Join</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Block-Nested-Loop-Join"><span class="nav-number">4.1.2.</span> <span class="nav-text">Block Nested Loop Join</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Index-Nested-Join-Loop"><span class="nav-number">4.1.3.</span> <span class="nav-text">Index Nested Join Loop</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Sort-Merge-Join"><span class="nav-number">4.2.</span> <span class="nav-text">Sort-Merge Join</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Hash-Join"><span class="nav-number">4.3.</span> <span class="nav-text">Hash Join</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Hash-Table-Contents"><span class="nav-number">4.3.1.</span> <span class="nav-text">Hash Table Contents</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Optimization-Probe-Filter"><span class="nav-number">4.3.2.</span> <span class="nav-text">Optimization : Probe Filter</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Partition-Hash-Join"><span class="nav-number">4.3.3.</span> <span class="nav-text">Partition Hash Join</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#Optimization-Hybrid-Hash-Join"><span class="nav-number">4.3.3.1.</span> <span class="nav-text">Optimization : Hybrid Hash Join</span></a></li></ol></li></ol></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="愚者大人的铁质卷烟盒"
+      src="/images/NiJiKa.GIF">
+  <p class="site-author-name" itemprop="name">愚者大人的铁质卷烟盒</p>
+  <div class="site-description" itemprop="description">琐碎和思考的堆放处</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">14</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">3</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/jinziguan123" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;jinziguan123" rel="noopener" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:18917950960@163.com" title="E-Mail → mailto:18917950960@163.com" rel="noopener" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2024</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">愚者大人的铁质卷烟盒</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> 强力驱动
+  </div>
+
+
+    <script async src="//dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+    <span id="busuanzi_container_site_pv">总访问量<span id="busuanzi_value_site_pv"></span>次</span>
+    <span class="post-meta-divider">|</span>
+    <span id="busuanzi_container_site_uv">总访客数<span id="busuanzi_value_site_uv"></span>人</span>
+    <span class="post-meta-divider">|</span>
+<!-- 不蒜子计数初始值纠正 -->
+<script>
+$(document).ready(function() {
+
+    var int = setInterval(fixCount, 50);  // 50ms周期检测函数
+    var countOffset = 20000;  // 初始化首次数据
+
+    function fixCount() {            
+       if (document.getElementById("busuanzi_container_site_pv").style.display != "none")
+        {
+            $("#busuanzi_value_site_pv").html(parseInt($("#busuanzi_value_site_pv").html()) + countOffset); 
+            clearInterval(int);
+        }                  
+        if ($("#busuanzi_container_site_pv").css("display") != "none")
+        {
+            $("#busuanzi_value_site_uv").html(parseInt($("#busuanzi_value_site_uv").html()) + countOffset); // 加上初始数据 
+            clearInterval(int); // 停止检测
+        }  
+    }
+       	
+});
+</script> 
+
+
+        
+<div class="busuanzi-count">
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+    <span class="post-meta-item" id="busuanzi_container_site_uv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+<script>
+NexT.utils.loadComments(document.querySelector('#lv-container'), () => {
+  window.livereOptions = {
+    refer: location.pathname.replace(CONFIG.root, '').replace('index.html', '')
+  };
+  (function(d, s) {
+    var j, e = d.getElementsByTagName(s)[0];
+    if (typeof LivereTower === 'function') { return; }
+    j = d.createElement(s);
+    j.src = 'https://cdn-city.livere.com/js/embed.dist.js';
+    j.async = true;
+    e.parentNode.insertBefore(j, e);
+  })(document, 'script');
+});
+</script>
+
+</body>
+</html>

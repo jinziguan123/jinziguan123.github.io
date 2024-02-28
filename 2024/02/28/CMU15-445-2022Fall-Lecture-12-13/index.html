@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+  <link rel="stylesheet" href="/lib/pace/pace-theme-flash.min.css">
+  <script src="/lib/pace/pace.min.js"></script>
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"example.com","root":"/","scheme":"Muse","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="Lecture 12,13: Query Execution主要讲了SQL语句查询执行的相关问题 Processing Model首先是处理模型，定义了数据库中执行查询计划的三种模式，分别是：  Iterator Model Materialization Model vectorization Model  Iterator Model又被称为Volcano Model或者Pipeline Mo">
+<meta property="og:type" content="article">
+<meta property="og:title" content="CMU15-445 2022Fall Lecture 12.13">
+<meta property="og:url" content="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-12-13/index.html">
+<meta property="og:site_name" content="CigaCase">
+<meta property="og:description" content="Lecture 12,13: Query Execution主要讲了SQL语句查询执行的相关问题 Processing Model首先是处理模型，定义了数据库中执行查询计划的三种模式，分别是：  Iterator Model Materialization Model vectorization Model  Iterator Model又被称为Volcano Model或者Pipeline Mo">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://example.com/assets/image-20240201152637134.png">
+<meta property="og:image" content="http://example.com/assets/image-20240201154720832.png">
+<meta property="og:image" content="http://example.com/assets/image-20240207151946216.png">
+<meta property="og:image" content="http://example.com/assets/image-20240207175055227.png">
+<meta property="og:image" content="http://example.com/assets/image-20240210150051734.png">
+<meta property="og:image" content="http://example.com/assets/image-20240213171653754.png">
+<meta property="article:published_time" content="2024-02-28T04:28:15.000Z">
+<meta property="article:modified_time" content="2024-02-28T04:29:49.571Z">
+<meta property="article:author" content="愚者大人的铁质卷烟盒">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://example.com/assets/image-20240201152637134.png">
+
+<link rel="canonical" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-12-13/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-CN'
+  };
+</script>
+
+  <title>CMU15-445 2022Fall Lecture 12.13 | CigaCase</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">CigaCase</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-12-13/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/NiJiKa.GIF">
+      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
+      <meta itemprop="description" content="琐碎和思考的堆放处">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="CigaCase">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          CMU15-445 2022Fall Lecture 12.13
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2024-02-28 12:28:15 / 修改时间：12:29:49" itemprop="dateCreated datePublished" datetime="2024-02-28T12:28:15+08:00">2024-02-28</time>
+            </span>
+
+          
+            <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv" style="display: none;">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-eye"></i>
+              </span>
+              <span class="post-meta-item-text">阅读次数：</span>
+              <span id="busuanzi_value_page_pv"></span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h1 id="Lecture-12-13-Query-Execution"><a href="#Lecture-12-13-Query-Execution" class="headerlink" title="Lecture 12,13: Query Execution"></a>Lecture 12,13: Query Execution</h1><p>主要讲了SQL语句查询执行的相关问题</p>
+<h1 id="Processing-Model"><a href="#Processing-Model" class="headerlink" title="Processing Model"></a>Processing Model</h1><p>首先是处理模型，定义了数据库中执行查询计划的三种模式，分别是：</p>
+<ul>
+<li>Iterator Model</li>
+<li>Materialization Model</li>
+<li>vectorization Model</li>
+</ul>
+<h2 id="Iterator-Model"><a href="#Iterator-Model" class="headerlink" title="Iterator Model"></a>Iterator Model</h2><p>又被称为Volcano Model或者Pipeline Model</p>
+<ul>
+<li><p>Iterator Model一共有三种基本的接口：Next()、Open()、Close()</p>
+</li>
+<li><p>该计算将关系代数中的每一种操作都抽象为一个operator，将整个SQL语句构造成一个operator树，这样一来，在进行查询的时候会从树顶向下不断调用next函数，而数据则会被自底向上拉取，下图中向下指的箭头就表示调用Next函数的方向，而向上指的箭头表示返回的数据</p>
+</li>
+</ul>
+<p><img src="/assets/image-20240201152637134.png" alt="image-20240201152637134"></p>
+<ul>
+<li>迭代模型的优点：<ul>
+<li>简单，每个operator可以单独实现逻辑，达到模块化处理，因此市面上有很多数据库都使用了迭代模型比如：SQLite、MongoDB、Impala、DB2、SQLServer、Greenplum、PostgreSQL、Oracle、MySQL</li>
+</ul>
+</li>
+<li>迭代模型的缺点：<ul>
+<li>查询树调用的Next接口次数太多，而且每次调用都指返回一条数据，使得CPU执行效率很低</li>
+<li>Join、Subqueries、Order by等操作经常会阻塞</li>
+</ul>
+</li>
+</ul>
+<h2 id="Materialization-Model"><a href="#Materialization-Model" class="headerlink" title="Materialization Model"></a>Materialization Model</h2><p>物化模型优化了迭代模型的缺点：对于每一个operator，一次性处理所有的输入，处理完之后将所有结果一次性输出：</p>
+<p><img src="/assets/image-20240201154720832.png" alt="image-20240201154720832"></p>
+<p>伪代码看上去和火山模型大差不差，区别只在于每一个operator都会将结果放到一个out列表中，最后进行输出</p>
+<ul>
+<li>物化模型对于OLTP负载更加友好，因为每一个查询所涉及到的数据范围都是较小的，并且调用的函数更少</li>
+<li>因此从另一方面来说，物化模型不适用于OLAP负载（因为OLAP涉及到的中间数据太多）</li>
+</ul>
+<h2 id="Vectorization-Model"><a href="#Vectorization-Model" class="headerlink" title="Vectorization Model"></a>Vectorization Model</h2><p>向量化模型与火山模型类似，对于每一种operator都要实现一种Next()函数，区别在于，向量化模型返回的是一批tuple，而不是火山模型中的一个tuple，可以简单理解成火山模型与物化模型两者的结合</p>
+<p><img src="/assets/image-20240207151946216.png" alt="image-20240207151946216"></p>
+<p>该模型适用于OLAP数据库，使得中间的结果不需要溢出到磁盘，同时也能够减少Next函数的调用次数</p>
+<h1 id="Access-Methods"><a href="#Access-Methods" class="headerlink" title="Access Methods"></a>Access Methods</h1><p>在执行查找的时候，DBMS需要一定的手段去访问叶子结点处的数据</p>
+<p>一共可以分为三种方法</p>
+<h2 id="Sequential-Scan"><a href="#Sequential-Scan" class="headerlink" title="Sequential Scan"></a>Sequential Scan</h2><p>最容易想到的就是顺序扫描：对于表中的每一个page，DBMS都从缓冲池中对其进行检索，并在此基础上遍历每一个tuple来决定是否要将其作为数据进行返回</p>
+<ul>
+<li>DBMS会保存一个游标（cursor），用来标记其上次访问的page&#x2F;slot</li>
+</ul>
+<h3 id="Sequential-Scan-Optimization"><a href="#Sequential-Scan-Optimization" class="headerlink" title="Sequential Scan : Optimization"></a>Sequential Scan : Optimization</h3><p>尽管顺序扫描是一种比较笨拙的方法，但可能也是我们唯一的选择</p>
+<p>然而顺序扫描是可以进行优化的，我们在之前的课中已经接触过一些了，比如：</p>
+<ul>
+<li>Pre-Fetching（Lecture 6）</li>
+<li>Buffer Pool Bypass（Lecture 6）</li>
+<li>Parallelization（Lecture 13）</li>
+<li>Heap Clustering（Lecture 8）</li>
+<li>Late Materialization（Lecture 11）</li>
+</ul>
+<p>这节课讲了一个新的方法，Data Skipping</p>
+<h4 id="Data-Skipping"><a href="#Data-Skipping" class="headerlink" title="Data Skipping"></a>Data Skipping</h4><p>有两种方法可以实现数据跳过组件：</p>
+<ol>
+<li><p>Approximate Queries（Lossy）</p>
+<p>近似查询会首先对整张表做一个抽样，形成一个表的子集，对这个子集执行查询，这样能够得到一个近似的结果</p>
+<p>近似查询是易失性的，这里的易失性应该是指会丢失一些本来应到能够找到的数据</p>
+</li>
+<li><p>Zone Map（Lossless）</p>
+<p>这里重点介绍的方法就是Zone Map法，简单来说就是对于查询涉及到的每一个page，都实现处理出一些聚合属性，比如这个page上的MAX、MIN、AVG、SUM、COUNT，这样在查询到来的时候就能够直接进行比较，判断是否值得花时间遍历这个page，达到加速的效果</p>
+<blockquote>
+<p>比如现在我们有如下数据，我们要执行<code>select * from table where val &gt; 600</code>，DBMS拿到了查询指令和Zone Map进行比较，发现这个page的MAX值为400，显然整个page的数据都是我们不需要的，那么直接跳过这个page即可</p>
+<p><img src="/assets/image-20240207175055227.png" alt="image-20240207175055227"></p>
+</blockquote>
+</li>
+</ol>
+<h2 id="Index-Scan"><a href="#Index-Scan" class="headerlink" title="Index Scan"></a>Index Scan</h2><p>由DBMS来选择一个index来查找tuple（13章会详细解释DBMS根据哪几个方面的来选择index）</p>
+<ul>
+<li>索引扫描又分为单索引扫描和多索引扫描（Multi-Index Scan），两者的区别和特点从名字就可以看出来，需要知道的是，多索引扫描会根据查询条件，在多个索引上查询结果并且将结果集合做一个并集或者交集</li>
+</ul>
+<h1 id="Modification-Queries"><a href="#Modification-Queries" class="headerlink" title="Modification Queries"></a>Modification Queries</h1><p>负责修改数据库中的表以及相关索引的操作称为修改查询，这些查询的输出可以是数据记录的id，也可以是tuple（比如returning）</p>
+<p>这里首先介绍了Halloween Problem（万圣节难题）：</p>
+<p>譬如在火山模型的数据库中执行更新操作<code>update people set salary = salary + 100 where salary &lt; 1100</code>的时候，会首先根据index，调用Next（）查找出来目标tuple，删除、重新赋值、插入，由此完成更新</p>
+<p>然而如果有一个tuple为：（Andy，999），在被更新之后会变成（andy，1099），此时这个tuple的物理位置已经改变，很有可能会被插入到原本位置之后，并且依然满足salary &lt; 1100的条件，所以会被第二次进行更新，变为（Andy，1199），这并不符合我们更新操作的目的</p>
+<p>解决办法就是：跟踪所有修改过的记录id</p>
+<h1 id="Expression-Evaluation"><a href="#Expression-Evaluation" class="headerlink" title="Expression Evaluation"></a>Expression Evaluation</h1><p>对于Where子句，DBMS会将其表示为一棵表达式树（expression tree），树中的不同结点代表不同的表达式类型例如：比较、析取、连接、算术运算符、常值、元祖属性引用等</p>
+<p>还介绍了Prepare子句，类似于函数的功能</p>
+<p>这一部分感觉就是普通的介绍，没有做很深入的讲解，看看就行</p>
+<h1 id="Scheduler"><a href="#Scheduler" class="headerlink" title="Scheduler"></a>Scheduler</h1><p>迄今为止我们所讨论的内容几乎都是基于数据流的角度来看待查询处理模型的，控制流以隐式的形式藏在一系列的查询操作中</p>
+<p>而有了scheduler（调度器），我们就可以显式地明确控制流了</p>
+<blockquote>
+<p>以下是个人理解：</p>
+<p>面向数据流是一件很复杂的事情，因为你没有办法非常细致地划分数据。比如人脑是没有办法清晰地认知：这一团数据是从哪里来的、要对它做什么、要把它发到哪里去之类的问题</p>
+<p>但是面向控制流就会让上述的事情变得很简单明了，是一种抽象程度更高的方法，此外可能对于分布式存储的系统更加友好？因为可以将每一个控制任务push或者pull到远程主机做处理然后再传输回来，比单纯发送数据的方式封装程度更高？</p>
+</blockquote>
+<hr>
+<h1 id="Parallel-x2F-Distributed"><a href="#Parallel-x2F-Distributed" class="headerlink" title="Parallel &#x2F; Distributed"></a>Parallel &#x2F; Distributed</h1><p>首先需要区分并行数据库和分布式数据库：</p>
+<ul>
+<li><p>首先需要明确的是，对于用户而言，两者是一样的，即对于某个查询返回某种结果，区别在于其内部设计</p>
+</li>
+<li><p>Parallel DBMSs：</p>
+<ul>
+<li>结点资源在物理上离得很近</li>
+<li>结点资源通过高速互联进行通信</li>
+<li>通信开销小并且是可靠的</li>
+</ul>
+</li>
+<li><p>Distributed DBMSs：</p>
+<ul>
+<li>结点资源之间的物理位置相距远</li>
+<li>结点资源通过低速互联进行通信</li>
+<li>无法忽视结点之间的通信开销</li>
+</ul>
+</li>
+</ul>
+<h1 id="Process-Model"><a href="#Process-Model" class="headerlink" title="Process Model"></a>Process Model</h1><p>过程模型定义了系统将为何种架构以处理并发的请求&#x2F;查询，其中，Worker负责执行一个单独的任务并且返回结果，是DBMS中的一个组件</p>
+<p>而模型的不同点就在于Worker的形式</p>
+<h2 id="Process-per-Worker"><a href="#Process-per-Worker" class="headerlink" title="Process per Worker"></a>Process per Worker</h2><p>第一种形式是进程模型：给每一个Worker都分配一个进程，由OS负责调度，对于一个查询中的每一个operator，都交给一个Worker来负责执行</p>
+<p>在线程的思想流行之前诞生的很多数据库都是用了这种模型</p>
+<p><img src="/assets/image-20240210150051734.png" alt="image-20240210150051734"></p>
+<p>优点是：其中一个进程的崩溃并不会影响整个系统的崩溃</p>
+<p>缺点是：极度依赖OS的调度，DBMS没有办法做到自行调度工作</p>
+<h2 id="Thread-per-Worker"><a href="#Thread-per-Worker" class="headerlink" title="Thread per Worker"></a>Thread per Worker</h2><p>第二种是线程模型：以线程的形式管理每一个Worker，是如今常用的数据库并行处理模型，DBMS能够主动控制线程的调度，调度算法能够更加灵活</p>
+<p>线程相对于进程的区别，即为线程模型相对于进程模型的优点和缺点——减少了进程带来的上下文切换、相比创建&#x2F;销毁一个进程，创建&#x2F;销毁一个线程的开销更小、不用管理公共内存；与此同时，一个线程的崩溃也会导致整个系统的崩溃</p>
+<blockquote>
+<p>关于Scheduling</p>
+<p>对于每一个查询计划，DBMS都要决定执行的时间、地点和方式</p>
+<p>需要考虑这个查询需要用到多少个Worker？需要用多少个CPU？这个查询需要在哪个CPU上处理？输出要保存在哪里？等等问题</p>
+<p>因此DBMS知道的内容（比如上下文相关的信息）总是要比OS多一些</p>
+</blockquote>
+<h2 id="Embedded-DBMS"><a href="#Embedded-DBMS" class="headerlink" title="Embedded DBMS"></a>Embedded DBMS</h2><p>最后一种方式是嵌入式，DBMS与应用程序运行在同一地址空间，由应用程序来负责线程和调度（这一部分没怎么看懂）</p>
+<h1 id="Inter-VS-Intra-Query-Parallelism"><a href="#Inter-VS-Intra-Query-Parallelism" class="headerlink" title="Inter- VS. Intra-Query Parallelism"></a>Inter- VS. Intra-Query Parallelism</h1><p>这里提出了两种并行化的思想的大概内容，姑且将其翻译为查询内并行性和查询间并行性</p>
+<h2 id="Inter-Query"><a href="#Inter-Query" class="headerlink" title="Inter-Query"></a>Inter-Query</h2><p>查询内并行性通过允许多个查询同时进行从而提高整体性能</p>
+<p>如果查询都是只读的，那么没有必要显式地协调查询与查询之间的先后，必要时，buffer pool可以处理大部分共享</p>
+<p>然而如果有多个查询在同时更新数据库，那么将会很难保持正确性，这个问题会在Lecture 15讨论事务相关内容的时候提及</p>
+<h2 id="Intra-Query"><a href="#Intra-Query" class="headerlink" title="Intra-Query"></a>Intra-Query</h2><p>通过并行执行运算符来提高单个查询的性能，在组织操作符的时候可以参考生产者&#x2F;消费者模型</p>
+<p>每一个operator都有一个并行化的版本</p>
+<p>这样可以让多个线程访问集中式的数据结构，也或者使用分区来分工合作</p>
+<p>其中操作又可以被划分为横向并行和纵向并行</p>
+<h3 id="Horizontal"><a href="#Horizontal" class="headerlink" title="Horizontal"></a>Horizontal</h3><p>横向并行，也可以称为操作内并行，将运算符分解为独立的片段，这些片段在不同的数据子集中执行相同的功能</p>
+<p>DBMS在查询计划中插入一个exchange操作符，用来合并&#x2F;拆分多个子操作符&#x2F;父操作符的结果</p>
+<p>即把一个操作分配给多个Worker，每个Worker都执行一部分，最终用exchange算子对结果进行合并</p>
+<h4 id="Exchange-Operator"><a href="#Exchange-Operator" class="headerlink" title="Exchange Operator"></a>Exchange Operator</h4><p>exchange算子有三种类型：</p>
+<ul>
+<li><p>Gather：</p>
+<p>从多个Worker处得到结果，进行合并之后作为一个单独的输出传递给上游</p>
+</li>
+<li><p>Distribute：</p>
+<p>将一个单独的输入分裂成多个输出传递给上游</p>
+</li>
+<li><p>Repartition：</p>
+<p>将多个输入重新分组成多个输出传递给上游</p>
+</li>
+</ul>
+<h3 id="Vertical"><a href="#Vertical" class="headerlink" title="Vertical"></a>Vertical</h3><p>纵向并行，思想类似于CPU的流水线，在运行一个操作的同时，另一个操作也在准备运行，一旦操作1处理完了一道数据就马上发给下一个操作2，因此不会出现类似于物化模型那样一次性传递一个数组的数据的情况</p>
+<h2 id="Bushy-Parallelism"><a href="#Bushy-Parallelism" class="headerlink" title="Bushy Parallelism"></a>Bushy Parallelism</h2><p>Inter和Intra-Parallelism的结合，上下游之间的不同部分都可以被划分成一个个独立的部分交给一个或几个Worker来处理，如下图</p>
+<p><img src="/assets/image-20240213171653754.png" alt="image-20240213171653754"></p>
+<h1 id="I-x2F-O-Parallelism"><a href="#I-x2F-O-Parallelism" class="headerlink" title="I&#x2F;O Parallelism"></a>I&#x2F;O Parallelism</h1><p>前面从过程模型的角度，介绍了基于并行查询的操作并行性。这里介绍了I&#x2F;O并行，是一种更加底层的并行方式</p>
+<p>对于单设备来说，I&#x2F;O始终是DBMS的瓶颈，如果能够把I&#x2F;O任务分配到多个设备中并行处理，那么就能够一定程度上突破这个瓶颈</p>
+<p>相关的方法有很多，这里主要介绍了两种：Multi-Disk Parallelism和Database Partitioning</p>
+<h2 id="Multi-Disk-Parallelism"><a href="#Multi-Disk-Parallelism" class="headerlink" title="Multi-Disk Parallelism"></a>Multi-Disk Parallelism</h2><p>即数据库文件分布在多个磁盘进行存储</p>
+<p>多磁盘并行主要考虑三方面因素：Performance、Durability、Capacity</p>
+<ul>
+<li><p>如果是基于硬件实现的多磁盘并行化：</p>
+<p>硬件控制器需要能够支持管理多个设备：例如现在有1～6号page，3个磁盘，那么控制器需要将page按照顺序分配给每个磁盘；或者将每一个page都复制3份到不同的磁盘上</p>
+</li>
+<li><p>如果是基于软件实现的多磁盘并行化：</p>
+<p>需要在文件&#x2F;对象的级别上使用擦除码，相较于传统的基于硬件实现，更加高效灵活（这一部分没怎么听懂）</p>
+</li>
+</ul>
+<p>无论基于哪种方法实现，数据交换的过程对于DBMS都是透明的</p>
+<h2 id="Database-Partitioning"><a href="#Database-Partitioning" class="headerlink" title="Database Partitioning"></a>Database Partitioning</h2><p>将数据库本身拆分成多个不相交的子集，进行分布式存储，这对于应用层而言是透明的</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2024/02/28/CMU15-445-2022Fall-Lecture-11/" rel="prev" title="CMU15-445 2022Fall Lecture 11">
+      <i class="fa fa-chevron-left"></i> CMU15-445 2022Fall Lecture 11
+    </a></div>
+      <div class="post-nav-item"></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+    
+  <div class="comments">
+    <div id="lv-container" data-id="city" data-uid="MTAyMC81ODU4MS8zNTA0Mw=="></div>
+  </div>
+  
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Lecture-12-13-Query-Execution"><span class="nav-number">1.</span> <span class="nav-text">Lecture 12,13: Query Execution</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Processing-Model"><span class="nav-number">2.</span> <span class="nav-text">Processing Model</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Iterator-Model"><span class="nav-number">2.1.</span> <span class="nav-text">Iterator Model</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Materialization-Model"><span class="nav-number">2.2.</span> <span class="nav-text">Materialization Model</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Vectorization-Model"><span class="nav-number">2.3.</span> <span class="nav-text">Vectorization Model</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Access-Methods"><span class="nav-number">3.</span> <span class="nav-text">Access Methods</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Sequential-Scan"><span class="nav-number">3.1.</span> <span class="nav-text">Sequential Scan</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Sequential-Scan-Optimization"><span class="nav-number">3.1.1.</span> <span class="nav-text">Sequential Scan : Optimization</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#Data-Skipping"><span class="nav-number">3.1.1.1.</span> <span class="nav-text">Data Skipping</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Index-Scan"><span class="nav-number">3.2.</span> <span class="nav-text">Index Scan</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Modification-Queries"><span class="nav-number">4.</span> <span class="nav-text">Modification Queries</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Expression-Evaluation"><span class="nav-number">5.</span> <span class="nav-text">Expression Evaluation</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Scheduler"><span class="nav-number">6.</span> <span class="nav-text">Scheduler</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Parallel-x2F-Distributed"><span class="nav-number">7.</span> <span class="nav-text">Parallel &#x2F; Distributed</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Process-Model"><span class="nav-number">8.</span> <span class="nav-text">Process Model</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Process-per-Worker"><span class="nav-number">8.1.</span> <span class="nav-text">Process per Worker</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Thread-per-Worker"><span class="nav-number">8.2.</span> <span class="nav-text">Thread per Worker</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Embedded-DBMS"><span class="nav-number">8.3.</span> <span class="nav-text">Embedded DBMS</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Inter-VS-Intra-Query-Parallelism"><span class="nav-number">9.</span> <span class="nav-text">Inter- VS. Intra-Query Parallelism</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Inter-Query"><span class="nav-number">9.1.</span> <span class="nav-text">Inter-Query</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Intra-Query"><span class="nav-number">9.2.</span> <span class="nav-text">Intra-Query</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Horizontal"><span class="nav-number">9.2.1.</span> <span class="nav-text">Horizontal</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#Exchange-Operator"><span class="nav-number">9.2.1.1.</span> <span class="nav-text">Exchange Operator</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Vertical"><span class="nav-number">9.2.2.</span> <span class="nav-text">Vertical</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Bushy-Parallelism"><span class="nav-number">9.3.</span> <span class="nav-text">Bushy Parallelism</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#I-x2F-O-Parallelism"><span class="nav-number">10.</span> <span class="nav-text">I&#x2F;O Parallelism</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Multi-Disk-Parallelism"><span class="nav-number">10.1.</span> <span class="nav-text">Multi-Disk Parallelism</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Database-Partitioning"><span class="nav-number">10.2.</span> <span class="nav-text">Database Partitioning</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="愚者大人的铁质卷烟盒"
+      src="/images/NiJiKa.GIF">
+  <p class="site-author-name" itemprop="name">愚者大人的铁质卷烟盒</p>
+  <div class="site-description" itemprop="description">琐碎和思考的堆放处</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">14</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">3</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/jinziguan123" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;jinziguan123" rel="noopener" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:18917950960@163.com" title="E-Mail → mailto:18917950960@163.com" rel="noopener" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2024</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">愚者大人的铁质卷烟盒</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> 强力驱动
+  </div>
+
+
+    <script async src="//dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+    <span id="busuanzi_container_site_pv">总访问量<span id="busuanzi_value_site_pv"></span>次</span>
+    <span class="post-meta-divider">|</span>
+    <span id="busuanzi_container_site_uv">总访客数<span id="busuanzi_value_site_uv"></span>人</span>
+    <span class="post-meta-divider">|</span>
+<!-- 不蒜子计数初始值纠正 -->
+<script>
+$(document).ready(function() {
+
+    var int = setInterval(fixCount, 50);  // 50ms周期检测函数
+    var countOffset = 20000;  // 初始化首次数据
+
+    function fixCount() {            
+       if (document.getElementById("busuanzi_container_site_pv").style.display != "none")
+        {
+            $("#busuanzi_value_site_pv").html(parseInt($("#busuanzi_value_site_pv").html()) + countOffset); 
+            clearInterval(int);
+        }                  
+        if ($("#busuanzi_container_site_pv").css("display") != "none")
+        {
+            $("#busuanzi_value_site_uv").html(parseInt($("#busuanzi_value_site_uv").html()) + countOffset); // 加上初始数据 
+            clearInterval(int); // 停止检测
+        }  
+    }
+       	
+});
+</script> 
+
+
+        
+<div class="busuanzi-count">
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+    <span class="post-meta-item" id="busuanzi_container_site_uv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+<script>
+NexT.utils.loadComments(document.querySelector('#lv-container'), () => {
+  window.livereOptions = {
+    refer: location.pathname.replace(CONFIG.root, '').replace('index.html', '')
+  };
+  (function(d, s) {
+    var j, e = d.getElementsByTagName(s)[0];
+    if (typeof LivereTower === 'function') { return; }
+    j = d.createElement(s);
+    j.src = 'https://cdn-city.livere.com/js/embed.dist.js';
+    j.async = true;
+    e.parentNode.insertBefore(j, e);
+  })(document, 'script');
+});
+</script>
+
+</body>
+</html>

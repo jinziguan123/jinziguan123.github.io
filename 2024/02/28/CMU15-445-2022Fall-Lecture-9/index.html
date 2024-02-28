@@ -22,19 +22,19 @@
     var CONFIG = {"hostname":"example.com","root":"/","scheme":"Muse","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
   </script>
 
-  <meta name="description" content="昨晚到家匆匆忙忙，飞机误点加上打车软件的背刺，回到家已经是半夜一两点的事情了。今早又不紧不慢地睡到十点左右起床清空行李箱，出去吃顿饭剪个头发，半个下午也就没了，回到家又要做题，吃完晚饭再和父亲唠两句，等到真的空下来了，也已经是夜里了 一下子从旅行的状态里回来，一时间还真有点不习惯，而既然现在自己已经闲了下来，那么也是时候写一下姗姗来迟的游记了 我这个人很少旅行，倒也不是不喜欢，只是单纯地很懒：懒得">
+  <meta name="description" content="Lecture 9: Index Concurrency Control本章主要介绍了数据库中几种闩锁的概念和简单的实现（非代码） Locks vs. Latches lock 保护当前事务的索引内容不会受到其他事务的影响 lock在整个事务的执行期间都会被持有 DBMS需要在发生冲突的时候回滚变更   latch 保护索引内部数据不会被其他线程影响 仅在线程对索引进行某个操作的时刻被持有（一般持">
 <meta property="og:type" content="article">
-<meta property="og:title" content="雾都小记">
-<meta property="og:url" content="http://example.com/2023/08/06/%E9%9B%BE%E9%83%BD%E5%B0%8F%E8%AE%B0/index.html">
+<meta property="og:title" content="CMU15-445 2022Fall Lecture 9">
+<meta property="og:url" content="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-9/index.html">
 <meta property="og:site_name" content="CigaCase">
-<meta property="og:description" content="昨晚到家匆匆忙忙，飞机误点加上打车软件的背刺，回到家已经是半夜一两点的事情了。今早又不紧不慢地睡到十点左右起床清空行李箱，出去吃顿饭剪个头发，半个下午也就没了，回到家又要做题，吃完晚饭再和父亲唠两句，等到真的空下来了，也已经是夜里了 一下子从旅行的状态里回来，一时间还真有点不习惯，而既然现在自己已经闲了下来，那么也是时候写一下姗姗来迟的游记了 我这个人很少旅行，倒也不是不喜欢，只是单纯地很懒：懒得">
+<meta property="og:description" content="Lecture 9: Index Concurrency Control本章主要介绍了数据库中几种闩锁的概念和简单的实现（非代码） Locks vs. Latches lock 保护当前事务的索引内容不会受到其他事务的影响 lock在整个事务的执行期间都会被持有 DBMS需要在发生冲突的时候回滚变更   latch 保护索引内部数据不会被其他线程影响 仅在线程对索引进行某个操作的时刻被持有（一般持">
 <meta property="og:locale" content="zh_CN">
-<meta property="article:published_time" content="2023-08-06T12:10:28.000Z">
-<meta property="article:modified_time" content="2023-09-05T02:49:19.270Z">
+<meta property="article:published_time" content="2024-02-28T04:27:24.000Z">
+<meta property="article:modified_time" content="2024-02-28T04:27:32.782Z">
 <meta property="article:author" content="愚者大人的铁质卷烟盒">
 <meta name="twitter:card" content="summary">
 
-<link rel="canonical" href="http://example.com/2023/08/06/%E9%9B%BE%E9%83%BD%E5%B0%8F%E8%AE%B0/">
+<link rel="canonical" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-9/">
 
 
 <script id="page-configurations">
@@ -47,7 +47,7 @@
   };
 </script>
 
-  <title>雾都小记 | CigaCase</title>
+  <title>CMU15-445 2022Fall Lecture 9 | CigaCase</title>
   
 
 
@@ -162,7 +162,7 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2023/08/06/%E9%9B%BE%E9%83%BD%E5%B0%8F%E8%AE%B0/">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-9/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="image" content="/images/NiJiKa.GIF">
@@ -175,7 +175,7 @@
     </span>
       <header class="post-header">
         <h1 class="post-title" itemprop="name headline">
-          雾都小记
+          CMU15-445 2022Fall Lecture 9
         </h1>
 
         <div class="post-meta">
@@ -184,24 +184,9 @@
                 <i class="far fa-calendar"></i>
               </span>
               <span class="post-meta-item-text">发表于</span>
+              
 
-              <time title="创建时间：2023-08-06 20:10:28" itemprop="dateCreated datePublished" datetime="2023-08-06T20:10:28+08:00">2023-08-06</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="far fa-calendar-check"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2023-09-05 10:49:19" itemprop="dateModified" datetime="2023-09-05T10:49:19+08:00">2023-09-05</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-folder"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/%E6%B8%B8%E8%AE%B0/" itemprop="url" rel="index"><span itemprop="name">游记</span></a>
-                </span>
+              <time title="创建时间：2024-02-28 12:27:24 / 修改时间：12:27:32" itemprop="dateCreated datePublished" datetime="2024-02-28T12:27:24+08:00">2024-02-28</time>
             </span>
 
           
@@ -222,14 +207,87 @@
     <div class="post-body" itemprop="articleBody">
 
       
-        <p>昨晚到家匆匆忙忙，飞机误点加上打车软件的背刺，回到家已经是半夜一两点的事情了。今早又不紧不慢地睡到十点左右起床清空行李箱，出去吃顿饭剪个头发，半个下午也就没了，回到家又要做题，吃完晚饭再和父亲唠两句，等到真的空下来了，也已经是夜里了</p>
-<p>一下子从旅行的状态里回来，一时间还真有点不习惯，而既然现在自己已经闲了下来，那么也是时候写一下姗姗来迟的游记了</p>
-<p>我这个人很少旅行，倒也不是不喜欢，只是单纯地很懒：懒得赶路，懒得做攻略，懒得离开能够给我带来足够安全感的独属于自己的房间<br>我去过的地方虽然不算多，却也不算少得可怜——当然绝大多数都是江浙沪包邮地区，类似于台州、南京、苏州之类的小地方<br>虽说我最近几年也出去到某个地方游山玩水过，但直到最近我才意识到：当我准备从大脑的某个角落里搜寻出自己曾经在这些那些地方的所见所闻所感，将其清洁一下，端上名为回忆的货架重新贩卖时，这商品却已经破损不堪，程度之深以至于我甚至没有办法从记忆的碎片中提取出一点旅途中无关紧要的琐事细细品味，只能够任凭抽象的诸如“那片海滩”、“那座山”来强迫自己抢回几片尚未被时间偷走的拼图<br>怕是要怪罪我年纪轻轻就有了少年痴呆的迹象，又或是要归咎于自己不解风情不善于用文字和照片记录下人生仅此一次的风景，总之，过去那几段国内也好国外也罢，我本以为能够给将来的自己留下深刻印象的旅途，如今看来却是完美地没能够完成它的历史使命</p>
-<p>旅行的意义在于：能够在为期几天的时间里逃离一成不变的日子、能够在已经被日常晒成灰黑的视网膜上重新泼上色彩、能够见识远在习以为常的世界之外更加遥远的世界<br>我知道像我曾经走马观花的旅行不过是一种浪费，手机里长时间打开的游戏更是对时间的辜负，长此以往，旅行就失去了乐趣，而失去了乐趣的娱乐活动，其本身的价值也就一落千丈<br>我不希望自己事到如今依旧犯下和数年前一样的错误，所以这次的雾都之旅，我尽可能地自己去想、去规划、去见证，不仅仅是把视线放在热门的景点，更多的是关注重庆整座城市的犄角旮旯和不经意间的一瞥。我感到自己的灵魂终于没有再被沪上的安逸所束缚，江南的温柔如水也终究还是被川渝的火辣所替代——何尝不是一种比单纯的打卡式旅游更加能够放松和充实自己的手段</p>
-<p>坐拥8万平方公里，3千万常住人口的雾都并不吝啬它的气魄，也同样不在乎外来者的存在。走在洪崖洞和解放碑附近的街道上，熙攘的人群淹没小小的个体，找不到自己的锚点；而环顾四周，无处不充斥着年轻人的气息，又仿佛看到了身为他们其中一份子的自己的位置<br>重庆这座城，无论横着走还是竖着走，无论上坡路还是下坡路，都令人胆战心惊——每当抬头，眼眸中倒映着的是看不到尽头的高楼；每当远眺，又觉得自己已经走了相当长的路聊以慰藉，不知不觉又陷入了名为征服的好胜心之中<br>不比上海灯红酒绿纸醉金迷的诱惑，重庆的魅力在于，你明明知道与眼前的荣华富贵相隔一条街道的地方就是几乎空无一人的老旧广场，你明明当下这人头攒动的名胜附近有着格格不入的烂尾楼，你明明知道山顶有着最美丽的鸟瞰视角而上山的路很远走起来很累，你明明知道重庆会不加掩饰地把光鲜与破败揉在一起粗暴地展现在你面前，却仍愿意迈开步子被它吞没，短暂地成为它的一部分，揭下它的面纱<br>最后在登上飞机之前向这座距离家乡一千五百多公里的城市道别，我心中长期以来心里莫名的包袱才终于放下：</p>
-<blockquote>
-<p><em>或许在过去的数年间的旅途中，我从未真正离开过上海</em><br><em>但至少这一次除外</em></p>
-</blockquote>
+        <h1 id="Lecture-9-Index-Concurrency-Control"><a href="#Lecture-9-Index-Concurrency-Control" class="headerlink" title="Lecture 9: Index Concurrency Control"></a>Lecture 9: Index Concurrency Control</h1><p>本章主要介绍了数据库中几种闩锁的概念和简单的实现（非代码）</p>
+<h1 id="Locks-vs-Latches"><a href="#Locks-vs-Latches" class="headerlink" title="Locks vs. Latches"></a>Locks vs. Latches</h1><ul>
+<li>lock<ol>
+<li>保护当前事务的索引内容不会受到其他事务的影响</li>
+<li>lock在整个事务的执行期间都会被持有</li>
+<li>DBMS需要在发生冲突的时候回滚变更</li>
+</ol>
+</li>
+<li>latch<ol>
+<li>保护索引内部数据不会被其他线程影响</li>
+<li>仅在线程对索引进行某个操作的时刻被持有（一般持有时间很短）</li>
+<li>DBMS不需要对数据的更新进行回滚</li>
+<li>latch有两种mode，分别为Read Mode和Write Mode，其中Read Mode可以同时被多个线程持有，但Write Mode不行</li>
+</ol>
+</li>
+</ul>
+<h1 id="Latch-Implementation"><a href="#Latch-Implementation" class="headerlink" title="Latch Implementation"></a>Latch Implementation</h1><h2 id="Blocking-OS-Mutex"><a href="#Blocking-OS-Mutex" class="headerlink" title="Blocking OS Mutex"></a>Blocking OS Mutex</h2><ul>
+<li>依赖OS内置的互斥机制，由<strong>用户空间的自旋latch</strong>以及<strong>OS的互斥锁</strong>组成。当DBMS无法获得用户空间的latch时，会试图进入内核态并获取更加昂贵的mutex，如果还是无法获取，则会被阻塞</li>
+<li>OS mutex在DBMS中不是一个好的选择，因为会被OS介入，而且开销比较大<ul>
+<li>例子：std::mutex  </li>
+<li>优点：使用简单</li>
+<li>缺点：消耗大，不可扩展</li>
+</ul>
+</li>
+</ul>
+<h2 id="Test-and-Set-Spin-Latch-TAS"><a href="#Test-and-Set-Spin-Latch-TAS" class="headerlink" title="Test-and-Set Spin Latch(TAS)"></a>Test-and-Set Spin Latch(TAS)</h2><ul>
+<li>自旋锁比mutex更有效，因为DBMS可以控制自旋锁在无法获取latch的情况下的下一步动作：比如可以继续尝试获取或者允许OS取消调度<ul>
+<li>例子：std::atomic&lt;T&gt;</li>
+<li>优点：上锁更高效，一个<code>std::atomic_flag latch</code>指令即可上锁</li>
+<li>缺点：没有扩展性，对于cache和OS并不友好</li>
+</ul>
+</li>
+</ul>
+<h2 id="Reader-Writer-Latches"><a href="#Reader-Writer-Latches" class="headerlink" title="Reader-Writer Latches"></a>Reader-Writer Latches</h2><ul>
+<li>mutex和自旋锁并不区分读写（对于数据库而言是不好的），DBMS需要一种可以支持并发读取的方法，这样如果程序有大量读取的需求就可以获得更好的效果</li>
+<li>读写锁允许latch以read或者write的mode进行等待，可以跟踪有多少线程持有该latch，以及有多少线程在等待获取latch。对于read锁，我们可以定义其在任何情况下都可以获得这把latch，也可以指定其只有在等待write的线程为空的时候才能获取；对于write锁，则需要等待read锁被全部释放<ul>
+<li>例子：std::shared_mutex</li>
+<li>优点：能够并发读取</li>
+<li>缺点：必须要额外维护两个队列：read线程和write线程以防止饥饿现象，内存开销会更大</li>
+</ul>
+</li>
+</ul>
+<h1 id="Hash-Table-Latching"><a href="#Hash-Table-Latching" class="headerlink" title="Hash Table Latching"></a>Hash Table Latching</h1><ul>
+<li>由于Hash数据结构本身的特性，所有线程在访问的时候都是按照顺序自上而下的，每次也都只会访问一个slot，因此不会出现死锁现象</li>
+<li>按照粒度的大小，Hash Table Latching可以被分成两种：<ul>
+<li>Page Latches：每个Page都用一把大锁锁住，每个线程在访问Page之前获取一个Read或者Write锁，这样的做法会降低程序的并发性，但是由于线程访问每个slot的速度很快，因为只需要一把锁即可实现</li>
+<li>Slot Latches：Page中的每个slot都有自己的锁，所以读写线程可以同时访问一个Page的不同slot，提高了并发度，但同时也增加了存储和计算开销</li>
+</ul>
+</li>
+</ul>
+<h1 id="B-Tree-Latching"><a href="#B-Tree-Latching" class="headerlink" title="B+ Tree Latching"></a>B+ Tree Latching</h1><ul>
+<li>B+树的锁主要为了防止以下问题：<ul>
+<li>不同线程同时修改同一个结点</li>
+<li>当一个线程对结点进行插入&#x2F;删除，导致结点出现了split&#x2F;merge现象时，另一个线程正在遍历树</li>
+</ul>
+</li>
+<li>Latch Crabbing&#x2F;Couping Protocol（锁存耦合协议）允许多个线程并发访问B+树，具体规则如下：<ul>
+<li>获取父节点锁</li>
+<li>获取子结点锁</li>
+<li>如果子结点被认为是安全的（不会发生split、merge、再分配），则释放父节点的锁</li>
+</ul>
+</li>
+<li>Basic Latch Crabbing Protocol<ul>
+<li>Search：从根结点开始向下，获取子结点锁-&gt;释放父节点锁，重复此步骤</li>
+<li>Insert&#x2F;Delete：从根结点向下按需获取x个结点的latch，一旦孩子结点被锁住了，检查是否安全，如果安全，则释放所有祖先的锁</li>
+<li>释放锁的顺序在逻辑上不重要，然而在现实中越靠近根结点的锁需要更先释放，否则会造成性能的下降</li>
+</ul>
+</li>
+<li>Better Latch Crabbing Protocol：<ul>
+<li>在改进的算法中，每一个线程都会默认到达目标结点的路径是安全的，并且以不断抓去Read锁的形式来到达，最终检验是否安全。如果不安全，则停止操作，重新开始，只不过重新遍历会抓去Write锁</li>
+<li>Search：与朴素的算法一致</li>
+<li><strong>Insert&#x2F;Delete</strong>：跟Search一样，不断获取和释放READ latch。最后在叶子结点上设置WRITE latch。如果叶子不安全，则重来，这次用基本算法的思路</li>
+</ul>
+</li>
+<li>Leaf Node Scan<ul>
+<li>前两种算法都是自上而下的，线程无法获取更上一层的锁存器，因此不会出现死锁现象</li>
+<li>然而扫描叶子结点的时候很容易出现死锁，当两个线程以相反的方向遍历到了相邻的叶子结点，就会出现死锁，而Index Latch本身并不支持死锁的检测和预防</li>
+<li>因为，唯一能够解决这个问题的方式就是通过code discipline，叶子结点的兄弟结点的锁存器必须遵循“no wait”原则。B+树必须面对锁存器获取失败的情况，一般会选择终止操作，重新启动</li>
+</ul>
+</li>
+</ul>
 
     </div>
 
@@ -245,12 +303,12 @@
         
     <div class="post-nav">
       <div class="post-nav-item">
-    <a href="/2023/07/02/%E4%B8%AD%E5%9B%BD%E4%BA%BA%E8%A2%AB%E5%BD%A2%E5%BC%8F%E4%B8%BB%E4%B9%89PUA%E7%9A%84%E4%B8%80%E7%94%9F/" rel="prev" title="中国人被形式主义PUA的一生">
-      <i class="fa fa-chevron-left"></i> 中国人被形式主义PUA的一生
+    <a href="/2024/02/28/CMU15-445-2022Fall-Lecture-6/" rel="prev" title="CMU15-445 2022Fall Lecture 6">
+      <i class="fa fa-chevron-left"></i> CMU15-445 2022Fall Lecture 6
     </a></div>
       <div class="post-nav-item">
-    <a href="/2023/11/14/%E8%BF%BD%E6%82%BC/" rel="next" title="追悼">
-      追悼 <i class="fa fa-chevron-right"></i>
+    <a href="/2024/02/28/CMU15-445-2022Fall-Lecture-10/" rel="next" title="CMU15-445 2022Fall Lecture 10">
+      CMU15-445 2022Fall Lecture 10 <i class="fa fa-chevron-right"></i>
     </a></div>
     </div>
       </footer>
@@ -315,6 +373,7 @@
 
       <!--noindex-->
       <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Lecture-9-Index-Concurrency-Control"><span class="nav-number">1.</span> <span class="nav-text">Lecture 9: Index Concurrency Control</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Locks-vs-Latches"><span class="nav-number">2.</span> <span class="nav-text">Locks vs. Latches</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Latch-Implementation"><span class="nav-number">3.</span> <span class="nav-text">Latch Implementation</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Blocking-OS-Mutex"><span class="nav-number">3.1.</span> <span class="nav-text">Blocking OS Mutex</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Test-and-Set-Spin-Latch-TAS"><span class="nav-number">3.2.</span> <span class="nav-text">Test-and-Set Spin Latch(TAS)</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Reader-Writer-Latches"><span class="nav-number">3.3.</span> <span class="nav-text">Reader-Writer Latches</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Hash-Table-Latching"><span class="nav-number">4.</span> <span class="nav-text">Hash Table Latching</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#B-Tree-Latching"><span class="nav-number">5.</span> <span class="nav-text">B+ Tree Latching</span></a></li></ol></div>
       </div>
       <!--/noindex-->
 

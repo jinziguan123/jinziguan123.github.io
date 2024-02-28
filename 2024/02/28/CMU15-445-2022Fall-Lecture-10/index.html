@@ -22,19 +22,19 @@
     var CONFIG = {"hostname":"example.com","root":"/","scheme":"Muse","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
   </script>
 
-  <meta name="description" content="昨晚到家匆匆忙忙，飞机误点加上打车软件的背刺，回到家已经是半夜一两点的事情了。今早又不紧不慢地睡到十点左右起床清空行李箱，出去吃顿饭剪个头发，半个下午也就没了，回到家又要做题，吃完晚饭再和父亲唠两句，等到真的空下来了，也已经是夜里了 一下子从旅行的状态里回来，一时间还真有点不习惯，而既然现在自己已经闲了下来，那么也是时候写一下姗姗来迟的游记了 我这个人很少旅行，倒也不是不喜欢，只是单纯地很懒：懒得">
+  <meta name="description" content="Lecture 10: Sorting &amp; Aggregation Algorithms本章主要介绍了几种排序与聚合算法的思想 Sorting在关系型数据库中，tuple之间并没有特定的顺序关系，因此在进行诸如group by, distinct, partition by, order by, join之类的操作时，需要对tuple进行排序如果内存足够放下这些数据，那么使用qsort进行">
 <meta property="og:type" content="article">
-<meta property="og:title" content="雾都小记">
-<meta property="og:url" content="http://example.com/2023/08/06/%E9%9B%BE%E9%83%BD%E5%B0%8F%E8%AE%B0/index.html">
+<meta property="og:title" content="CMU15-445 2022Fall Lecture 10">
+<meta property="og:url" content="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-10/index.html">
 <meta property="og:site_name" content="CigaCase">
-<meta property="og:description" content="昨晚到家匆匆忙忙，飞机误点加上打车软件的背刺，回到家已经是半夜一两点的事情了。今早又不紧不慢地睡到十点左右起床清空行李箱，出去吃顿饭剪个头发，半个下午也就没了，回到家又要做题，吃完晚饭再和父亲唠两句，等到真的空下来了，也已经是夜里了 一下子从旅行的状态里回来，一时间还真有点不习惯，而既然现在自己已经闲了下来，那么也是时候写一下姗姗来迟的游记了 我这个人很少旅行，倒也不是不喜欢，只是单纯地很懒：懒得">
+<meta property="og:description" content="Lecture 10: Sorting &amp; Aggregation Algorithms本章主要介绍了几种排序与聚合算法的思想 Sorting在关系型数据库中，tuple之间并没有特定的顺序关系，因此在进行诸如group by, distinct, partition by, order by, join之类的操作时，需要对tuple进行排序如果内存足够放下这些数据，那么使用qsort进行">
 <meta property="og:locale" content="zh_CN">
-<meta property="article:published_time" content="2023-08-06T12:10:28.000Z">
-<meta property="article:modified_time" content="2023-09-05T02:49:19.270Z">
+<meta property="article:published_time" content="2024-02-28T04:27:40.000Z">
+<meta property="article:modified_time" content="2024-02-28T04:27:47.274Z">
 <meta property="article:author" content="愚者大人的铁质卷烟盒">
 <meta name="twitter:card" content="summary">
 
-<link rel="canonical" href="http://example.com/2023/08/06/%E9%9B%BE%E9%83%BD%E5%B0%8F%E8%AE%B0/">
+<link rel="canonical" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-10/">
 
 
 <script id="page-configurations">
@@ -47,7 +47,7 @@
   };
 </script>
 
-  <title>雾都小记 | CigaCase</title>
+  <title>CMU15-445 2022Fall Lecture 10 | CigaCase</title>
   
 
 
@@ -162,7 +162,7 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2023/08/06/%E9%9B%BE%E9%83%BD%E5%B0%8F%E8%AE%B0/">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-10/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="image" content="/images/NiJiKa.GIF">
@@ -175,7 +175,7 @@
     </span>
       <header class="post-header">
         <h1 class="post-title" itemprop="name headline">
-          雾都小记
+          CMU15-445 2022Fall Lecture 10
         </h1>
 
         <div class="post-meta">
@@ -184,24 +184,9 @@
                 <i class="far fa-calendar"></i>
               </span>
               <span class="post-meta-item-text">发表于</span>
+              
 
-              <time title="创建时间：2023-08-06 20:10:28" itemprop="dateCreated datePublished" datetime="2023-08-06T20:10:28+08:00">2023-08-06</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="far fa-calendar-check"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2023-09-05 10:49:19" itemprop="dateModified" datetime="2023-09-05T10:49:19+08:00">2023-09-05</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-folder"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/%E6%B8%B8%E8%AE%B0/" itemprop="url" rel="index"><span itemprop="name">游记</span></a>
-                </span>
+              <time title="创建时间：2024-02-28 12:27:40 / 修改时间：12:27:47" itemprop="dateCreated datePublished" datetime="2024-02-28T12:27:40+08:00">2024-02-28</time>
             </span>
 
           
@@ -222,14 +207,65 @@
     <div class="post-body" itemprop="articleBody">
 
       
-        <p>昨晚到家匆匆忙忙，飞机误点加上打车软件的背刺，回到家已经是半夜一两点的事情了。今早又不紧不慢地睡到十点左右起床清空行李箱，出去吃顿饭剪个头发，半个下午也就没了，回到家又要做题，吃完晚饭再和父亲唠两句，等到真的空下来了，也已经是夜里了</p>
-<p>一下子从旅行的状态里回来，一时间还真有点不习惯，而既然现在自己已经闲了下来，那么也是时候写一下姗姗来迟的游记了</p>
-<p>我这个人很少旅行，倒也不是不喜欢，只是单纯地很懒：懒得赶路，懒得做攻略，懒得离开能够给我带来足够安全感的独属于自己的房间<br>我去过的地方虽然不算多，却也不算少得可怜——当然绝大多数都是江浙沪包邮地区，类似于台州、南京、苏州之类的小地方<br>虽说我最近几年也出去到某个地方游山玩水过，但直到最近我才意识到：当我准备从大脑的某个角落里搜寻出自己曾经在这些那些地方的所见所闻所感，将其清洁一下，端上名为回忆的货架重新贩卖时，这商品却已经破损不堪，程度之深以至于我甚至没有办法从记忆的碎片中提取出一点旅途中无关紧要的琐事细细品味，只能够任凭抽象的诸如“那片海滩”、“那座山”来强迫自己抢回几片尚未被时间偷走的拼图<br>怕是要怪罪我年纪轻轻就有了少年痴呆的迹象，又或是要归咎于自己不解风情不善于用文字和照片记录下人生仅此一次的风景，总之，过去那几段国内也好国外也罢，我本以为能够给将来的自己留下深刻印象的旅途，如今看来却是完美地没能够完成它的历史使命</p>
-<p>旅行的意义在于：能够在为期几天的时间里逃离一成不变的日子、能够在已经被日常晒成灰黑的视网膜上重新泼上色彩、能够见识远在习以为常的世界之外更加遥远的世界<br>我知道像我曾经走马观花的旅行不过是一种浪费，手机里长时间打开的游戏更是对时间的辜负，长此以往，旅行就失去了乐趣，而失去了乐趣的娱乐活动，其本身的价值也就一落千丈<br>我不希望自己事到如今依旧犯下和数年前一样的错误，所以这次的雾都之旅，我尽可能地自己去想、去规划、去见证，不仅仅是把视线放在热门的景点，更多的是关注重庆整座城市的犄角旮旯和不经意间的一瞥。我感到自己的灵魂终于没有再被沪上的安逸所束缚，江南的温柔如水也终究还是被川渝的火辣所替代——何尝不是一种比单纯的打卡式旅游更加能够放松和充实自己的手段</p>
-<p>坐拥8万平方公里，3千万常住人口的雾都并不吝啬它的气魄，也同样不在乎外来者的存在。走在洪崖洞和解放碑附近的街道上，熙攘的人群淹没小小的个体，找不到自己的锚点；而环顾四周，无处不充斥着年轻人的气息，又仿佛看到了身为他们其中一份子的自己的位置<br>重庆这座城，无论横着走还是竖着走，无论上坡路还是下坡路，都令人胆战心惊——每当抬头，眼眸中倒映着的是看不到尽头的高楼；每当远眺，又觉得自己已经走了相当长的路聊以慰藉，不知不觉又陷入了名为征服的好胜心之中<br>不比上海灯红酒绿纸醉金迷的诱惑，重庆的魅力在于，你明明知道与眼前的荣华富贵相隔一条街道的地方就是几乎空无一人的老旧广场，你明明当下这人头攒动的名胜附近有着格格不入的烂尾楼，你明明知道山顶有着最美丽的鸟瞰视角而上山的路很远走起来很累，你明明知道重庆会不加掩饰地把光鲜与破败揉在一起粗暴地展现在你面前，却仍愿意迈开步子被它吞没，短暂地成为它的一部分，揭下它的面纱<br>最后在登上飞机之前向这座距离家乡一千五百多公里的城市道别，我心中长期以来心里莫名的包袱才终于放下：</p>
+        <h1 id="Lecture-10-Sorting-amp-Aggregation-Algorithms"><a href="#Lecture-10-Sorting-amp-Aggregation-Algorithms" class="headerlink" title="Lecture 10: Sorting &amp; Aggregation Algorithms"></a>Lecture 10: Sorting &amp; Aggregation Algorithms</h1><p>本章主要介绍了几种排序与聚合算法的思想</p>
+<h1 id="Sorting"><a href="#Sorting" class="headerlink" title="Sorting"></a>Sorting</h1><p>在关系型数据库中，tuple之间并没有特定的顺序关系，因此在进行诸如group by, distinct, partition by, order by, join之类的操作时，需要对tuple进行排序<br>如果内存足够放下这些数据，那么使用qsort进行排序即可；然而内存未必能够放下这么多的tuple，因此在这种情况下需要使用external sorting，能够根据需要将排序溢出到磁盘，并且倾向于顺序I&#x2F;O</p>
+<h2 id="Top-N-Heap-Sorting"><a href="#Top-N-Heap-Sorting" class="headerlink" title="Top-N Heap Sorting"></a>Top-N Heap Sorting</h2><ul>
+<li>如果一个查询包含一个带有limit的order by，则DBMS只需要查找到前N个元素即可，也就是使用Top-N Heap Sort。理想情况是将前N个元素放入内存，这样DBMS只需要维护一个优先队列即可</li>
+</ul>
 <blockquote>
-<p><em>或许在过去的数年间的旅途中，我从未真正离开过上海</em><br><em>但至少这一次除外</em></p>
+<p>例如我们有以下查询：<code>select * from enrolled order by sid fetch first 4 rows with ties</code>，我们需要输出学号前四小的学生信息，如果学号相同，则并列输出。排序方法如下：</p>
+<ul>
+<li>首先创建大小为4的堆</li>
+<li>遍历数据，如果堆未满，则直接放入堆；否则，如果fetch指向的数据已经在堆中，则将堆的大小扩大到两倍（因为要求with ties）并且放入堆；如果该数据不在堆中，则判断是否是我们需要的数据：如果是，则将堆首的相同元素全部pop，放入堆；如果不是，则跳过该fetch</li>
+</ul>
 </blockquote>
+<h2 id="External-Merge-Sort"><a href="#External-Merge-Sort" class="headerlink" title="External Merge Sort"></a>External Merge Sort</h2><h3 id="Two-way-Merge-Sort"><a href="#Two-way-Merge-Sort" class="headerlink" title="Two-way Merge Sort"></a>Two-way Merge Sort</h3><ul>
+<li>最基本的两路归并排序：在排序阶段从磁盘中读取page到内存，排序结束后写回磁盘；在合并阶段，他使用三个缓冲页——从磁盘中读取两个page到其中两个frame，并且将其合并到第三个frame，每当第三个frame被填满，就会将其写回磁盘，并且替换成一个空的page。其中每一组排好序的page被称为一个run，每一次遍历称为一个pass</li>
+<li>如果参与排序的page数量为N，则该算法一共进行了$$1+\lceil\log_2N\rceil$$次遍历，总IO成本为$$2N\times (pass nums)$$</li>
+</ul>
+<h3 id="General（K-way）-Merge-Sort"><a href="#General（K-way）-Merge-Sort" class="headerlink" title="General（K-way） Merge Sort"></a>General（K-way） Merge Sort</h3><ul>
+<li><p>该算法的一般版本允许DBMS使用三个以上的缓冲页</p>
+<p>B表示缓冲页总数，在排序阶段，一次可以读取B个page，并且将$$\lceil \frac{N}{B} \rceil$$个排好序的run写回磁盘；在合并阶段，可以在每个通道中合并最多B-1个runs，将结果放入最后一个缓冲页并且写回磁盘</p>
+</li>
+<li><p>在一般的版本中，一共需要遍历$$1 + \lceil log_{B-1} \lceil \frac{N}{B} \rceil  \rceil$$次排序，总IO开销依然是$$2N\times (pass nums)$$</p>
+</li>
+</ul>
+<h3 id="Double-Buffering-Optimization"><a href="#Double-Buffering-Optimization" class="headerlink" title="Double Buffering Optimization"></a>Double Buffering Optimization</h3><ul>
+<li>优化思想是：假设我们从原本有的4个缓冲页扩大到了8个，那么如果还是按照原本3+1的思路进行串行的归并排序和写回，就会浪费一部分的IO请求等待时间。双缓冲优化使用多线程，组成两个3+1：当第一组缓冲区正在进行归并排序的时候，第二组缓冲区已经开始从磁盘中预读取page到frame中，这样一旦第一组IO结束，即可马上开始下一组IO的运算</li>
+</ul>
+<h3 id="Using-B-Tree"><a href="#Using-B-Tree" class="headerlink" title="Using B+ Tree"></a>Using B+ Tree</h3><ul>
+<li>对于DBMS，可以使用聚类B+索引来帮助排序，因为在B+树的叶子结点中，所有数据的存储都是有序的，IO的访问也都是顺序的，可以有效减小计算开销，这比外部归并排序要来的高效</li>
+<li>反之，如果是非聚类的B+索引，那么使用它就不是一个很好的选择（因为数据不连续），几乎所有访问都要从磁盘中读取而非buffer pool</li>
+</ul>
+<h1 id="Aggregation"><a href="#Aggregation" class="headerlink" title="Aggregation"></a>Aggregation</h1><p>在执行聚合运算的时候，往往是将一个或者多个tuple的值折叠成一个标量值，例如<code>select distinct cid from enrolled where grade in (&#39;B&#39;,&#39;C) order by cid</code></p>
+<p>总体来说有两种实现聚合的方法：(1)排序，(2)散列</p>
+<h2 id="Sorting-1"><a href="#Sorting-1" class="headerlink" title="Sorting"></a>Sorting</h2><ul>
+<li>DBMS首先根据group by语句对tuple进行排序，如果buffer pool够用，则直接使用qsort，否则使用外部归并算法。然后DBMS会对排好序的数据进行顺序扫描来计算聚合</li>
+<li>在执行排序聚合，重要是要对查询操作进行排序，以效率最大化。例如：如果查询需要一个过滤器，最好先执行过滤器，然后对过滤后的数据进行排序，以减少数据量</li>
+</ul>
+<h2 id="Hashing"><a href="#Hashing" class="headerlink" title="Hashing"></a>Hashing</h2><ul>
+<li><p>由于在计算聚合的时候，散列的计算成本总是要比排序低得多，所以DBMS在扫描表的时候会填充一个临时的哈希表（ephemeral hash table），对于每一条记录，都会检查哈希表中是否已经有该条目，并且进行适当的修改。如果哈希表太大，DBMS就会将其溢出到磁盘上（？）。完成这个任务有两个阶段：</p>
+<ul>
+<li><p>Phase #1 - Partition：</p>
+<p>使用哈希函数h1，根据目标的hash key将tuple分割到不同的磁盘分区，这样所有匹配的tuple都会被分配到同一片区域，然后DBMS会通过输出缓冲区将分区溢出到磁盘上</p>
+</li>
+<li><p>Phase #2 - ReHash：</p>
+<p>对于磁盘上的每一个分区，将其page读入内存，并且根据第二个哈希函数h2，建立一个哈希表，由此把所有匹配的tuple都聚集到一起。如果hash表太小了以至于无法容纳所有数据，那么可以考虑将当前分区重新进行分割，或者混杂其他基于排序或者基于散列的算法</p>
+</li>
+</ul>
+</li>
+<li><p>在ReHash阶段，DBMS可以将需要输出的聚合存储为（GroupByKey -&gt; RunningValue）的配对，RunningValue的内容取决于聚合函数</p>
+<blockquote>
+<p>例如如果我们想要输出<code>select cid, AVG(gpa) from enrolled</code>，可以将AVG存储为(COUNT,SUM)的形式</p>
+</blockquote>
+</li>
+<li><p>而对于一个新插入的tuple</p>
+<ul>
+<li>如果它能够找到一个匹配的GroupByKey，则适当更新RunningValue</li>
+<li>否则插入一个新的(GroupByKey -&gt; RunningValue)</li>
+</ul>
+</li>
+</ul>
 
     </div>
 
@@ -245,12 +281,12 @@
         
     <div class="post-nav">
       <div class="post-nav-item">
-    <a href="/2023/07/02/%E4%B8%AD%E5%9B%BD%E4%BA%BA%E8%A2%AB%E5%BD%A2%E5%BC%8F%E4%B8%BB%E4%B9%89PUA%E7%9A%84%E4%B8%80%E7%94%9F/" rel="prev" title="中国人被形式主义PUA的一生">
-      <i class="fa fa-chevron-left"></i> 中国人被形式主义PUA的一生
+    <a href="/2024/02/28/CMU15-445-2022Fall-Lecture-9/" rel="prev" title="CMU15-445 2022Fall Lecture 9">
+      <i class="fa fa-chevron-left"></i> CMU15-445 2022Fall Lecture 9
     </a></div>
       <div class="post-nav-item">
-    <a href="/2023/11/14/%E8%BF%BD%E6%82%BC/" rel="next" title="追悼">
-      追悼 <i class="fa fa-chevron-right"></i>
+    <a href="/2024/02/28/CMU15-445-2022Fall-Lecture-11/" rel="next" title="CMU15-445 2022Fall Lecture 11">
+      CMU15-445 2022Fall Lecture 11 <i class="fa fa-chevron-right"></i>
     </a></div>
     </div>
       </footer>
@@ -315,6 +351,7 @@
 
       <!--noindex-->
       <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Lecture-10-Sorting-amp-Aggregation-Algorithms"><span class="nav-number">1.</span> <span class="nav-text">Lecture 10: Sorting &amp; Aggregation Algorithms</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Sorting"><span class="nav-number">2.</span> <span class="nav-text">Sorting</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Top-N-Heap-Sorting"><span class="nav-number">2.1.</span> <span class="nav-text">Top-N Heap Sorting</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#External-Merge-Sort"><span class="nav-number">2.2.</span> <span class="nav-text">External Merge Sort</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Two-way-Merge-Sort"><span class="nav-number">2.2.1.</span> <span class="nav-text">Two-way Merge Sort</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#General%EF%BC%88K-way%EF%BC%89-Merge-Sort"><span class="nav-number">2.2.2.</span> <span class="nav-text">General（K-way） Merge Sort</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Double-Buffering-Optimization"><span class="nav-number">2.2.3.</span> <span class="nav-text">Double Buffering Optimization</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Using-B-Tree"><span class="nav-number">2.2.4.</span> <span class="nav-text">Using B+ Tree</span></a></li></ol></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Aggregation"><span class="nav-number">3.</span> <span class="nav-text">Aggregation</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Sorting-1"><span class="nav-number">3.1.</span> <span class="nav-text">Sorting</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Hashing"><span class="nav-number">3.2.</span> <span class="nav-text">Hashing</span></a></li></ol></li></ol></div>
       </div>
       <!--/noindex-->
 

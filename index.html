@@ -159,6 +159,968 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-12-13/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/NiJiKa.GIF">
+      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
+      <meta itemprop="description" content="琐碎和思考的堆放处">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="CigaCase">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2024/02/28/CMU15-445-2022Fall-Lecture-12-13/" class="post-title-link" itemprop="url">CMU15-445 2022Fall Lecture 12.13</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2024-02-28 12:28:15 / 修改时间：12:29:49" itemprop="dateCreated datePublished" datetime="2024-02-28T12:28:15+08:00">2024-02-28</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h1 id="Lecture-12-13-Query-Execution"><a href="#Lecture-12-13-Query-Execution" class="headerlink" title="Lecture 12,13: Query Execution"></a>Lecture 12,13: Query Execution</h1><p>主要讲了SQL语句查询执行的相关问题</p>
+<h1 id="Processing-Model"><a href="#Processing-Model" class="headerlink" title="Processing Model"></a>Processing Model</h1><p>首先是处理模型，定义了数据库中执行查询计划的三种模式，分别是：</p>
+<ul>
+<li>Iterator Model</li>
+<li>Materialization Model</li>
+<li>vectorization Model</li>
+</ul>
+<h2 id="Iterator-Model"><a href="#Iterator-Model" class="headerlink" title="Iterator Model"></a>Iterator Model</h2><p>又被称为Volcano Model或者Pipeline Model</p>
+<ul>
+<li><p>Iterator Model一共有三种基本的接口：Next()、Open()、Close()</p>
+</li>
+<li><p>该计算将关系代数中的每一种操作都抽象为一个operator，将整个SQL语句构造成一个operator树，这样一来，在进行查询的时候会从树顶向下不断调用next函数，而数据则会被自底向上拉取，下图中向下指的箭头就表示调用Next函数的方向，而向上指的箭头表示返回的数据</p>
+</li>
+</ul>
+<p><img src="/assets/image-20240201152637134.png" alt="image-20240201152637134"></p>
+<ul>
+<li>迭代模型的优点：<ul>
+<li>简单，每个operator可以单独实现逻辑，达到模块化处理，因此市面上有很多数据库都使用了迭代模型比如：SQLite、MongoDB、Impala、DB2、SQLServer、Greenplum、PostgreSQL、Oracle、MySQL</li>
+</ul>
+</li>
+<li>迭代模型的缺点：<ul>
+<li>查询树调用的Next接口次数太多，而且每次调用都指返回一条数据，使得CPU执行效率很低</li>
+<li>Join、Subqueries、Order by等操作经常会阻塞</li>
+</ul>
+</li>
+</ul>
+<h2 id="Materialization-Model"><a href="#Materialization-Model" class="headerlink" title="Materialization Model"></a>Materialization Model</h2><p>物化模型优化了迭代模型的缺点：对于每一个operator，一次性处理所有的输入，处理完之后将所有结果一次性输出：</p>
+<p><img src="/assets/image-20240201154720832.png" alt="image-20240201154720832"></p>
+<p>伪代码看上去和火山模型大差不差，区别只在于每一个operator都会将结果放到一个out列表中，最后进行输出</p>
+<ul>
+<li>物化模型对于OLTP负载更加友好，因为每一个查询所涉及到的数据范围都是较小的，并且调用的函数更少</li>
+<li>因此从另一方面来说，物化模型不适用于OLAP负载（因为OLAP涉及到的中间数据太多）</li>
+</ul>
+<h2 id="Vectorization-Model"><a href="#Vectorization-Model" class="headerlink" title="Vectorization Model"></a>Vectorization Model</h2><p>向量化模型与火山模型类似，对于每一种operator都要实现一种Next()函数，区别在于，向量化模型返回的是一批tuple，而不是火山模型中的一个tuple，可以简单理解成火山模型与物化模型两者的结合</p>
+<p><img src="/assets/image-20240207151946216.png" alt="image-20240207151946216"></p>
+<p>该模型适用于OLAP数据库，使得中间的结果不需要溢出到磁盘，同时也能够减少Next函数的调用次数</p>
+<h1 id="Access-Methods"><a href="#Access-Methods" class="headerlink" title="Access Methods"></a>Access Methods</h1><p>在执行查找的时候，DBMS需要一定的手段去访问叶子结点处的数据</p>
+<p>一共可以分为三种方法</p>
+<h2 id="Sequential-Scan"><a href="#Sequential-Scan" class="headerlink" title="Sequential Scan"></a>Sequential Scan</h2><p>最容易想到的就是顺序扫描：对于表中的每一个page，DBMS都从缓冲池中对其进行检索，并在此基础上遍历每一个tuple来决定是否要将其作为数据进行返回</p>
+<ul>
+<li>DBMS会保存一个游标（cursor），用来标记其上次访问的page&#x2F;slot</li>
+</ul>
+<h3 id="Sequential-Scan-Optimization"><a href="#Sequential-Scan-Optimization" class="headerlink" title="Sequential Scan : Optimization"></a>Sequential Scan : Optimization</h3><p>尽管顺序扫描是一种比较笨拙的方法，但可能也是我们唯一的选择</p>
+<p>然而顺序扫描是可以进行优化的，我们在之前的课中已经接触过一些了，比如：</p>
+<ul>
+<li>Pre-Fetching（Lecture 6）</li>
+<li>Buffer Pool Bypass（Lecture 6）</li>
+<li>Parallelization（Lecture 13）</li>
+<li>Heap Clustering（Lecture 8）</li>
+<li>Late Materialization（Lecture 11）</li>
+</ul>
+<p>这节课讲了一个新的方法，Data Skipping</p>
+<h4 id="Data-Skipping"><a href="#Data-Skipping" class="headerlink" title="Data Skipping"></a>Data Skipping</h4><p>有两种方法可以实现数据跳过组件：</p>
+<ol>
+<li><p>Approximate Queries（Lossy）</p>
+<p>近似查询会首先对整张表做一个抽样，形成一个表的子集，对这个子集执行查询，这样能够得到一个近似的结果</p>
+<p>近似查询是易失性的，这里的易失性应该是指会丢失一些本来应到能够找到的数据</p>
+</li>
+<li><p>Zone Map（Lossless）</p>
+<p>这里重点介绍的方法就是Zone Map法，简单来说就是对于查询涉及到的每一个page，都实现处理出一些聚合属性，比如这个page上的MAX、MIN、AVG、SUM、COUNT，这样在查询到来的时候就能够直接进行比较，判断是否值得花时间遍历这个page，达到加速的效果</p>
+<blockquote>
+<p>比如现在我们有如下数据，我们要执行<code>select * from table where val &gt; 600</code>，DBMS拿到了查询指令和Zone Map进行比较，发现这个page的MAX值为400，显然整个page的数据都是我们不需要的，那么直接跳过这个page即可</p>
+<p><img src="/assets/image-20240207175055227.png" alt="image-20240207175055227"></p>
+</blockquote>
+</li>
+</ol>
+<h2 id="Index-Scan"><a href="#Index-Scan" class="headerlink" title="Index Scan"></a>Index Scan</h2><p>由DBMS来选择一个index来查找tuple（13章会详细解释DBMS根据哪几个方面的来选择index）</p>
+<ul>
+<li>索引扫描又分为单索引扫描和多索引扫描（Multi-Index Scan），两者的区别和特点从名字就可以看出来，需要知道的是，多索引扫描会根据查询条件，在多个索引上查询结果并且将结果集合做一个并集或者交集</li>
+</ul>
+<h1 id="Modification-Queries"><a href="#Modification-Queries" class="headerlink" title="Modification Queries"></a>Modification Queries</h1><p>负责修改数据库中的表以及相关索引的操作称为修改查询，这些查询的输出可以是数据记录的id，也可以是tuple（比如returning）</p>
+<p>这里首先介绍了Halloween Problem（万圣节难题）：</p>
+<p>譬如在火山模型的数据库中执行更新操作<code>update people set salary = salary + 100 where salary &lt; 1100</code>的时候，会首先根据index，调用Next（）查找出来目标tuple，删除、重新赋值、插入，由此完成更新</p>
+<p>然而如果有一个tuple为：（Andy，999），在被更新之后会变成（andy，1099），此时这个tuple的物理位置已经改变，很有可能会被插入到原本位置之后，并且依然满足salary &lt; 1100的条件，所以会被第二次进行更新，变为（Andy，1199），这并不符合我们更新操作的目的</p>
+<p>解决办法就是：跟踪所有修改过的记录id</p>
+<h1 id="Expression-Evaluation"><a href="#Expression-Evaluation" class="headerlink" title="Expression Evaluation"></a>Expression Evaluation</h1><p>对于Where子句，DBMS会将其表示为一棵表达式树（expression tree），树中的不同结点代表不同的表达式类型例如：比较、析取、连接、算术运算符、常值、元祖属性引用等</p>
+<p>还介绍了Prepare子句，类似于函数的功能</p>
+<p>这一部分感觉就是普通的介绍，没有做很深入的讲解，看看就行</p>
+<h1 id="Scheduler"><a href="#Scheduler" class="headerlink" title="Scheduler"></a>Scheduler</h1><p>迄今为止我们所讨论的内容几乎都是基于数据流的角度来看待查询处理模型的，控制流以隐式的形式藏在一系列的查询操作中</p>
+<p>而有了scheduler（调度器），我们就可以显式地明确控制流了</p>
+<blockquote>
+<p>以下是个人理解：</p>
+<p>面向数据流是一件很复杂的事情，因为你没有办法非常细致地划分数据。比如人脑是没有办法清晰地认知：这一团数据是从哪里来的、要对它做什么、要把它发到哪里去之类的问题</p>
+<p>但是面向控制流就会让上述的事情变得很简单明了，是一种抽象程度更高的方法，此外可能对于分布式存储的系统更加友好？因为可以将每一个控制任务push或者pull到远程主机做处理然后再传输回来，比单纯发送数据的方式封装程度更高？</p>
+</blockquote>
+<hr>
+<h1 id="Parallel-x2F-Distributed"><a href="#Parallel-x2F-Distributed" class="headerlink" title="Parallel &#x2F; Distributed"></a>Parallel &#x2F; Distributed</h1><p>首先需要区分并行数据库和分布式数据库：</p>
+<ul>
+<li><p>首先需要明确的是，对于用户而言，两者是一样的，即对于某个查询返回某种结果，区别在于其内部设计</p>
+</li>
+<li><p>Parallel DBMSs：</p>
+<ul>
+<li>结点资源在物理上离得很近</li>
+<li>结点资源通过高速互联进行通信</li>
+<li>通信开销小并且是可靠的</li>
+</ul>
+</li>
+<li><p>Distributed DBMSs：</p>
+<ul>
+<li>结点资源之间的物理位置相距远</li>
+<li>结点资源通过低速互联进行通信</li>
+<li>无法忽视结点之间的通信开销</li>
+</ul>
+</li>
+</ul>
+<h1 id="Process-Model"><a href="#Process-Model" class="headerlink" title="Process Model"></a>Process Model</h1><p>过程模型定义了系统将为何种架构以处理并发的请求&#x2F;查询，其中，Worker负责执行一个单独的任务并且返回结果，是DBMS中的一个组件</p>
+<p>而模型的不同点就在于Worker的形式</p>
+<h2 id="Process-per-Worker"><a href="#Process-per-Worker" class="headerlink" title="Process per Worker"></a>Process per Worker</h2><p>第一种形式是进程模型：给每一个Worker都分配一个进程，由OS负责调度，对于一个查询中的每一个operator，都交给一个Worker来负责执行</p>
+<p>在线程的思想流行之前诞生的很多数据库都是用了这种模型</p>
+<p><img src="/assets/image-20240210150051734.png" alt="image-20240210150051734"></p>
+<p>优点是：其中一个进程的崩溃并不会影响整个系统的崩溃</p>
+<p>缺点是：极度依赖OS的调度，DBMS没有办法做到自行调度工作</p>
+<h2 id="Thread-per-Worker"><a href="#Thread-per-Worker" class="headerlink" title="Thread per Worker"></a>Thread per Worker</h2><p>第二种是线程模型：以线程的形式管理每一个Worker，是如今常用的数据库并行处理模型，DBMS能够主动控制线程的调度，调度算法能够更加灵活</p>
+<p>线程相对于进程的区别，即为线程模型相对于进程模型的优点和缺点——减少了进程带来的上下文切换、相比创建&#x2F;销毁一个进程，创建&#x2F;销毁一个线程的开销更小、不用管理公共内存；与此同时，一个线程的崩溃也会导致整个系统的崩溃</p>
+<blockquote>
+<p>关于Scheduling</p>
+<p>对于每一个查询计划，DBMS都要决定执行的时间、地点和方式</p>
+<p>需要考虑这个查询需要用到多少个Worker？需要用多少个CPU？这个查询需要在哪个CPU上处理？输出要保存在哪里？等等问题</p>
+<p>因此DBMS知道的内容（比如上下文相关的信息）总是要比OS多一些</p>
+</blockquote>
+<h2 id="Embedded-DBMS"><a href="#Embedded-DBMS" class="headerlink" title="Embedded DBMS"></a>Embedded DBMS</h2><p>最后一种方式是嵌入式，DBMS与应用程序运行在同一地址空间，由应用程序来负责线程和调度（这一部分没怎么看懂）</p>
+<h1 id="Inter-VS-Intra-Query-Parallelism"><a href="#Inter-VS-Intra-Query-Parallelism" class="headerlink" title="Inter- VS. Intra-Query Parallelism"></a>Inter- VS. Intra-Query Parallelism</h1><p>这里提出了两种并行化的思想的大概内容，姑且将其翻译为查询内并行性和查询间并行性</p>
+<h2 id="Inter-Query"><a href="#Inter-Query" class="headerlink" title="Inter-Query"></a>Inter-Query</h2><p>查询内并行性通过允许多个查询同时进行从而提高整体性能</p>
+<p>如果查询都是只读的，那么没有必要显式地协调查询与查询之间的先后，必要时，buffer pool可以处理大部分共享</p>
+<p>然而如果有多个查询在同时更新数据库，那么将会很难保持正确性，这个问题会在Lecture 15讨论事务相关内容的时候提及</p>
+<h2 id="Intra-Query"><a href="#Intra-Query" class="headerlink" title="Intra-Query"></a>Intra-Query</h2><p>通过并行执行运算符来提高单个查询的性能，在组织操作符的时候可以参考生产者&#x2F;消费者模型</p>
+<p>每一个operator都有一个并行化的版本</p>
+<p>这样可以让多个线程访问集中式的数据结构，也或者使用分区来分工合作</p>
+<p>其中操作又可以被划分为横向并行和纵向并行</p>
+<h3 id="Horizontal"><a href="#Horizontal" class="headerlink" title="Horizontal"></a>Horizontal</h3><p>横向并行，也可以称为操作内并行，将运算符分解为独立的片段，这些片段在不同的数据子集中执行相同的功能</p>
+<p>DBMS在查询计划中插入一个exchange操作符，用来合并&#x2F;拆分多个子操作符&#x2F;父操作符的结果</p>
+<p>即把一个操作分配给多个Worker，每个Worker都执行一部分，最终用exchange算子对结果进行合并</p>
+<h4 id="Exchange-Operator"><a href="#Exchange-Operator" class="headerlink" title="Exchange Operator"></a>Exchange Operator</h4><p>exchange算子有三种类型：</p>
+<ul>
+<li><p>Gather：</p>
+<p>从多个Worker处得到结果，进行合并之后作为一个单独的输出传递给上游</p>
+</li>
+<li><p>Distribute：</p>
+<p>将一个单独的输入分裂成多个输出传递给上游</p>
+</li>
+<li><p>Repartition：</p>
+<p>将多个输入重新分组成多个输出传递给上游</p>
+</li>
+</ul>
+<h3 id="Vertical"><a href="#Vertical" class="headerlink" title="Vertical"></a>Vertical</h3><p>纵向并行，思想类似于CPU的流水线，在运行一个操作的同时，另一个操作也在准备运行，一旦操作1处理完了一道数据就马上发给下一个操作2，因此不会出现类似于物化模型那样一次性传递一个数组的数据的情况</p>
+<h2 id="Bushy-Parallelism"><a href="#Bushy-Parallelism" class="headerlink" title="Bushy Parallelism"></a>Bushy Parallelism</h2><p>Inter和Intra-Parallelism的结合，上下游之间的不同部分都可以被划分成一个个独立的部分交给一个或几个Worker来处理，如下图</p>
+<p><img src="/assets/image-20240213171653754.png" alt="image-20240213171653754"></p>
+<h1 id="I-x2F-O-Parallelism"><a href="#I-x2F-O-Parallelism" class="headerlink" title="I&#x2F;O Parallelism"></a>I&#x2F;O Parallelism</h1><p>前面从过程模型的角度，介绍了基于并行查询的操作并行性。这里介绍了I&#x2F;O并行，是一种更加底层的并行方式</p>
+<p>对于单设备来说，I&#x2F;O始终是DBMS的瓶颈，如果能够把I&#x2F;O任务分配到多个设备中并行处理，那么就能够一定程度上突破这个瓶颈</p>
+<p>相关的方法有很多，这里主要介绍了两种：Multi-Disk Parallelism和Database Partitioning</p>
+<h2 id="Multi-Disk-Parallelism"><a href="#Multi-Disk-Parallelism" class="headerlink" title="Multi-Disk Parallelism"></a>Multi-Disk Parallelism</h2><p>即数据库文件分布在多个磁盘进行存储</p>
+<p>多磁盘并行主要考虑三方面因素：Performance、Durability、Capacity</p>
+<ul>
+<li><p>如果是基于硬件实现的多磁盘并行化：</p>
+<p>硬件控制器需要能够支持管理多个设备：例如现在有1～6号page，3个磁盘，那么控制器需要将page按照顺序分配给每个磁盘；或者将每一个page都复制3份到不同的磁盘上</p>
+</li>
+<li><p>如果是基于软件实现的多磁盘并行化：</p>
+<p>需要在文件&#x2F;对象的级别上使用擦除码，相较于传统的基于硬件实现，更加高效灵活（这一部分没怎么听懂）</p>
+</li>
+</ul>
+<p>无论基于哪种方法实现，数据交换的过程对于DBMS都是透明的</p>
+<h2 id="Database-Partitioning"><a href="#Database-Partitioning" class="headerlink" title="Database Partitioning"></a>Database Partitioning</h2><p>将数据库本身拆分成多个不相交的子集，进行分布式存储，这对于应用层而言是透明的</p>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-11/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/NiJiKa.GIF">
+      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
+      <meta itemprop="description" content="琐碎和思考的堆放处">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="CigaCase">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2024/02/28/CMU15-445-2022Fall-Lecture-11/" class="post-title-link" itemprop="url">CMU15-445 2022Fall Lecture 11</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2024-02-28 12:27:51 / 修改时间：12:27:56" itemprop="dateCreated datePublished" datetime="2024-02-28T12:27:51+08:00">2024-02-28</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h1 id="Lecture-11-Join-Algorithms"><a href="#Lecture-11-Join-Algorithms" class="headerlink" title="Lecture 11: Join Algorithms"></a>Lecture 11: Join Algorithms</h1><p>本章介绍了join算法的思想和实现</p>
+<h1 id="Join-Operator"><a href="#Join-Operator" class="headerlink" title="Join Operator"></a>Join Operator</h1><ul>
+<li><p>首先是join在底层是如何实现的：这里有两种方式</p>
+<p>例如对于MySql语句：<code>select R.id, S.date from R join S on R.id = S.id where S.value &gt; 100</code></p>
+<ul>
+<li><p>Early Materialization：</p>
+<p>这种方法一开始就将所有我们需要用到的具体数据都读取好放入内存，详细一点来讲就是把R.id和S.data直接作为新的tuple插入表中，这样一来，该查询的所有后续操作都不用再回到磁盘中读取数据</p>
+</li>
+<li><p>Late Materialization：</p>
+<p>与前者相对的，滞后具象方法在一开始只会将匹配到的tuple的Record IDS放入表中，等到上层的操作需要获取数据的时候再去磁盘中拿。这种方法对于列存储的DBMS比较友好，因为最终除了我们需要的数据以外，我们不会读取到任何无关的数据</p>
+</li>
+</ul>
+</li>
+</ul>
+<h1 id="Join-vs-Cross-Product"><a href="#Join-vs-Cross-Product" class="headerlink" title="Join vs. Cross-Product"></a>Join vs. Cross-Product</h1><p>这里需要进行一下连接操作与笛卡尔积之间的比较：</p>
+<p>相对而言笛卡尔积是一种更加低效的方法，因为对于两张大小分别为m和n的表，一次笛卡尔积操作需要用两个for循环来遍历两张表，最终获得一张m*n大小的输出表</p>
+<blockquote>
+<p>例如<code>select * from s cross join e</code>就是一个笛卡尔积操作，最终输出的结果一来没有规律可言，而来耗费时间更长</p>
+<p>而<code>select * from s join e on s.id = e.id</code>是一个join操作，输出结果明显会更小更快</p>
+</blockquote>
+<h1 id="Join-Algorithms"><a href="#Join-Algorithms" class="headerlink" title="Join Algorithms"></a>Join Algorithms</h1><h2 id="Nested-Loop-Join"><a href="#Nested-Loop-Join" class="headerlink" title="Nested Loop Join"></a>Nested Loop Join</h2><h3 id="Naive-Nested-Loop-Join"><a href="#Naive-Nested-Loop-Join" class="headerlink" title="Naive Nested Loop Join"></a>Naive Nested Loop Join</h3><ul>
+<li><p>这是最简单的join算法，遍历两个表中的所有tuple，如果两两匹配，则输出</p>
+</li>
+<li><p>显然这是一个糟糕的算法，如果R表有M个page、m个tuple，S表有N个page、n个tuple，则对于一次join，开销将会是$$M + (m \times N)$$</p>
+<blockquote>
+<p>例如R有1000页，100000个tuple；S有500页，40000个tuple</p>
+<p>那么做一次join的IO次数为：$$1000 + (100000 \times 500) &#x3D; 50001000$$次</p>
+<p>如果一次IO要0.1ms，那么join一次就要将近1.3小时</p>
+<p>即使使用大小比较小的S表作为outer loop的主体，最终也要近乎1.1小时</p>
+</blockquote>
+</li>
+</ul>
+<h3 id="Block-Nested-Loop-Join"><a href="#Block-Nested-Loop-Join" class="headerlink" title="Block Nested Loop Join"></a>Block Nested Loop Join</h3><p>朴素的循环算法没有充分利用缓冲池，由此引出了块嵌套循环</p>
+<ul>
+<li><p>假设我们缓冲区大小为B，则我们使用B-2个缓冲区用来装载外表（即外侧遍历的表），用一个缓冲区装载内表，最后一个缓冲区用来输出，写成伪代码如下：</p>
+<blockquote>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> each page pR(Belong to R) <span class="keyword">in</span> <span class="built_in">range</span>(B-<span class="number">2</span>):</span><br><span class="line">	<span class="keyword">for</span> each page pS(Belong to S) <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">1</span>):</span><br><span class="line">		<span class="keyword">for</span> each <span class="built_in">tuple</span> r <span class="keyword">in</span> pR:</span><br><span class="line">		<span class="keyword">for</span> each <span class="built_in">tuple</span> s <span class="keyword">in</span> pS:</span><br><span class="line">  		<span class="keyword">if</span> r matches s then emit</span><br></pre></td></tr></table></figure>
+</blockquote>
+</li>
+<li><p>这个算法的IO复杂度为$$M + \lceil M &#x2F; (B-2) \rceil \times N$$</p>
+<blockquote>
+<p><strong>如果外循环可以完全装入内存：</strong></p>
+<p>加入一次IO要0.1ms，那么总时长只要0.15秒</p>
+</blockquote>
+</li>
+</ul>
+<h3 id="Index-Nested-Join-Loop"><a href="#Index-Nested-Join-Loop" class="headerlink" title="Index Nested Join Loop"></a>Index Nested Join Loop</h3><p>上述两种算法，性能瓶颈在于：对于外循环中的每一个tuple，都需要遍历一次内循环中的tuple来进行判断，因此我们可以使用索引进行优化</p>
+<ul>
+<li>具体做法为：在关系S的连接属性上建立索引，对于R中的每一个元组，根据索引找到对应的S中元组进行连接</li>
+<li>假设在索引上查找的代价为C，则IO复杂度为：$$M + m \times C$$</li>
+</ul>
+<h2 id="Sort-Merge-Join"><a href="#Sort-Merge-Join" class="headerlink" title="Sort-Merge Join"></a>Sort-Merge Join</h2><p>如果我们手上的两张表都是有序的，那么join工作就会简单很多；如果他们不是有序的，那就可以考虑使用上节课讲到的排序算法让他们变得有序</p>
+<ul>
+<li><p>具体流程如下：</p>
+<ul>
+<li><p>Phase #1: Sort</p>
+<ul>
+<li><p>对两张表以join所使用到的key作为关键字进行排序</p>
+</li>
+<li><p>如果内存放不下这么多page，则需要使用外部排序</p>
+</li>
+</ul>
+</li>
+<li><p>Phase #2: Merge</p>
+<ul>
+<li>对两张排好序的表进行配对，这样外循环的元素就不用每次都遍历一遍内循环的元素了</li>
+<li>可能会需要根据join的类型进行回溯，这里具体</li>
+</ul>
+<blockquote>
+<p>比如表R：</p>
+<table>
+<thead>
+<tr>
+<th>id</th>
+<th>name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>100</td>
+<td>Andy</td>
+</tr>
+<tr>
+<td>200</td>
+<td>GZA</td>
+</tr>
+<tr>
+<td>200</td>
+<td>GZA</td>
+</tr>
+</tbody></table>
+<p>表S：</p>
+<table>
+<thead>
+<tr>
+<th>id</th>
+<th>value</th>
+<th>cdate</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>100</td>
+<td>2222</td>
+<td>10&#x2F;4&#x2F;2023</td>
+</tr>
+<tr>
+<td>100</td>
+<td>9999</td>
+<td>10&#x2F;4&#x2F;2023</td>
+</tr>
+<tr>
+<td>200</td>
+<td>8888</td>
+<td>10&#x2F;4&#x2F;2023</td>
+</tr>
+<tr>
+<td>400</td>
+<td>7777</td>
+<td>10&#x2F;4&#x2F;2023</td>
+</tr>
+</tbody></table>
+<p>当R表遍历到第二行，而S表遍历到第三行时，会输出这组tuple，S表的指针会向下移动到第四行，此时发现R表中仍然有id&#x3D;200的tuple存在，则需要进行回溯，将指针退回第三行</p>
+</blockquote>
+</li>
+</ul>
+</li>
+<li><p>IO开销如下：</p>
+<blockquote>
+<p>Sort Cost(R) : $$2M \times (1 + \lceil log_{B-1}{\lceil M &#x2F; B \rceil} \rceil)$$</p>
+<p>Sort Cost(S) : $$2N \times (1 + \lceil log_{B-1}{\lceil N &#x2F; B \rceil} \rceil)$$</p>
+<p>Merge Cost : $$M + N$$</p>
+<p>-&gt;Total Cost : Sort + Merge</p>
+<p>例如R有1000页，100000个tuple；S有500页，40000个tuple</p>
+<p>则一共需要IO次数7500次，如果每次IO需要0.1ms，则一共需要0.75s</p>
+</blockquote>
+</li>
+<li><p>排序join算法的最坏情况为：如果两张表的所有tuple都一模一样，那么回溯的次数将会大大增加，开销会来到$$(M \times N) + (sort cost)$$</p>
+</li>
+</ul>
+<h2 id="Hash-Join"><a href="#Hash-Join" class="headerlink" title="Hash Join"></a>Hash Join</h2><ul>
+<li><p>哈希join算法也有两个阶段：</p>
+<ul>
+<li><p>Phase #1: Build</p>
+<p>首先使用哈希函数h1扫描外层表来获取一张哈希表，其中哈希方式可以任选，只不过在实际应用中，线性探查法是效果最好的</p>
+</li>
+<li><p>Phase #2: Probe</p>
+<p>扫描内层表并且使用哈希函数h1来跳转并且寻找匹配的tuple</p>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="Hash-Table-Contents"><a href="#Hash-Table-Contents" class="headerlink" title="Hash Table Contents"></a>Hash Table Contents</h3><p>对于一张哈希表，我们不仅仅要记录哈希值，还要记录对应的key，以防发生冲突时形成错误的match</p>
+<p>此外，有些DBMS还会记录下来tuple的value，这取决于其使用的策略是一开始所提到的Early Materialization 还是Later Materialization</p>
+<h3 id="Optimization-Probe-Filter"><a href="#Optimization-Probe-Filter" class="headerlink" title="Optimization : Probe Filter"></a>Optimization : Probe Filter</h3><p>对于Hash Join的一种常见的优化方式是使用Bloom Filter。这是一种概率性的数据结构，存放在CPU的cache中，Bloom Filter会在创建哈希表的时候判断：这个key是否存在于内层表中，他可能会将不存在误判为存在，但不会将存在的key误判为不存在</p>
+<p>这样一来，当我们想要进入哈希表进行查找的时候，我们可以首先访问一下Bloom Filter，可以加快join的速度</p>
+<h3 id="Partition-Hash-Join"><a href="#Partition-Hash-Join" class="headerlink" title="Partition Hash Join"></a>Partition Hash Join</h3><ul>
+<li><p>有的时候哈希表没有办法装进内存，这个时候我们可以使用聚类哈希join，大概意思就是在build之前就先对输入的relation进行分类，然后针对每一个partition进行前面提到的hash join算法</p>
+</li>
+<li><p>Recursive Partition: 关于这一部分其实有点没太看懂，好像是说要用两个哈希函数来对两个表分别进行递归聚类，然后看tuple是否匹配（？）</p>
+</li>
+<li><p>IO开销如下：</p>
+<blockquote>
+<p>如果我们不使用递归聚类，那么</p>
+<p>Partition Phase: $$2(M+N)$$次IO</p>
+<p>Probe Phase: $$M+N$$次IO</p>
+</blockquote>
+</li>
+</ul>
+<h4 id="Optimization-Hybrid-Hash-Join"><a href="#Optimization-Hybrid-Hash-Join" class="headerlink" title="Optimization : Hybrid Hash Join"></a>Optimization : Hybrid Hash Join</h4><p>如果一个表中的key是skewed的（大概意思就是这个key在这个表中非常多），那么DBMS会将这个partition视作热点分区，将其保存在内存而非写回磁盘</p>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-10/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/NiJiKa.GIF">
+      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
+      <meta itemprop="description" content="琐碎和思考的堆放处">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="CigaCase">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2024/02/28/CMU15-445-2022Fall-Lecture-10/" class="post-title-link" itemprop="url">CMU15-445 2022Fall Lecture 10</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2024-02-28 12:27:40 / 修改时间：12:27:47" itemprop="dateCreated datePublished" datetime="2024-02-28T12:27:40+08:00">2024-02-28</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h1 id="Lecture-10-Sorting-amp-Aggregation-Algorithms"><a href="#Lecture-10-Sorting-amp-Aggregation-Algorithms" class="headerlink" title="Lecture 10: Sorting &amp; Aggregation Algorithms"></a>Lecture 10: Sorting &amp; Aggregation Algorithms</h1><p>本章主要介绍了几种排序与聚合算法的思想</p>
+<h1 id="Sorting"><a href="#Sorting" class="headerlink" title="Sorting"></a>Sorting</h1><p>在关系型数据库中，tuple之间并没有特定的顺序关系，因此在进行诸如group by, distinct, partition by, order by, join之类的操作时，需要对tuple进行排序<br>如果内存足够放下这些数据，那么使用qsort进行排序即可；然而内存未必能够放下这么多的tuple，因此在这种情况下需要使用external sorting，能够根据需要将排序溢出到磁盘，并且倾向于顺序I&#x2F;O</p>
+<h2 id="Top-N-Heap-Sorting"><a href="#Top-N-Heap-Sorting" class="headerlink" title="Top-N Heap Sorting"></a>Top-N Heap Sorting</h2><ul>
+<li>如果一个查询包含一个带有limit的order by，则DBMS只需要查找到前N个元素即可，也就是使用Top-N Heap Sort。理想情况是将前N个元素放入内存，这样DBMS只需要维护一个优先队列即可</li>
+</ul>
+<blockquote>
+<p>例如我们有以下查询：<code>select * from enrolled order by sid fetch first 4 rows with ties</code>，我们需要输出学号前四小的学生信息，如果学号相同，则并列输出。排序方法如下：</p>
+<ul>
+<li>首先创建大小为4的堆</li>
+<li>遍历数据，如果堆未满，则直接放入堆；否则，如果fetch指向的数据已经在堆中，则将堆的大小扩大到两倍（因为要求with ties）并且放入堆；如果该数据不在堆中，则判断是否是我们需要的数据：如果是，则将堆首的相同元素全部pop，放入堆；如果不是，则跳过该fetch</li>
+</ul>
+</blockquote>
+<h2 id="External-Merge-Sort"><a href="#External-Merge-Sort" class="headerlink" title="External Merge Sort"></a>External Merge Sort</h2><h3 id="Two-way-Merge-Sort"><a href="#Two-way-Merge-Sort" class="headerlink" title="Two-way Merge Sort"></a>Two-way Merge Sort</h3><ul>
+<li>最基本的两路归并排序：在排序阶段从磁盘中读取page到内存，排序结束后写回磁盘；在合并阶段，他使用三个缓冲页——从磁盘中读取两个page到其中两个frame，并且将其合并到第三个frame，每当第三个frame被填满，就会将其写回磁盘，并且替换成一个空的page。其中每一组排好序的page被称为一个run，每一次遍历称为一个pass</li>
+<li>如果参与排序的page数量为N，则该算法一共进行了$$1+\lceil\log_2N\rceil$$次遍历，总IO成本为$$2N\times (pass nums)$$</li>
+</ul>
+<h3 id="General（K-way）-Merge-Sort"><a href="#General（K-way）-Merge-Sort" class="headerlink" title="General（K-way） Merge Sort"></a>General（K-way） Merge Sort</h3><ul>
+<li><p>该算法的一般版本允许DBMS使用三个以上的缓冲页</p>
+<p>B表示缓冲页总数，在排序阶段，一次可以读取B个page，并且将$$\lceil \frac{N}{B} \rceil$$个排好序的run写回磁盘；在合并阶段，可以在每个通道中合并最多B-1个runs，将结果放入最后一个缓冲页并且写回磁盘</p>
+</li>
+<li><p>在一般的版本中，一共需要遍历$$1 + \lceil log_{B-1} \lceil \frac{N}{B} \rceil  \rceil$$次排序，总IO开销依然是$$2N\times (pass nums)$$</p>
+</li>
+</ul>
+<h3 id="Double-Buffering-Optimization"><a href="#Double-Buffering-Optimization" class="headerlink" title="Double Buffering Optimization"></a>Double Buffering Optimization</h3><ul>
+<li>优化思想是：假设我们从原本有的4个缓冲页扩大到了8个，那么如果还是按照原本3+1的思路进行串行的归并排序和写回，就会浪费一部分的IO请求等待时间。双缓冲优化使用多线程，组成两个3+1：当第一组缓冲区正在进行归并排序的时候，第二组缓冲区已经开始从磁盘中预读取page到frame中，这样一旦第一组IO结束，即可马上开始下一组IO的运算</li>
+</ul>
+<h3 id="Using-B-Tree"><a href="#Using-B-Tree" class="headerlink" title="Using B+ Tree"></a>Using B+ Tree</h3><ul>
+<li>对于DBMS，可以使用聚类B+索引来帮助排序，因为在B+树的叶子结点中，所有数据的存储都是有序的，IO的访问也都是顺序的，可以有效减小计算开销，这比外部归并排序要来的高效</li>
+<li>反之，如果是非聚类的B+索引，那么使用它就不是一个很好的选择（因为数据不连续），几乎所有访问都要从磁盘中读取而非buffer pool</li>
+</ul>
+<h1 id="Aggregation"><a href="#Aggregation" class="headerlink" title="Aggregation"></a>Aggregation</h1><p>在执行聚合运算的时候，往往是将一个或者多个tuple的值折叠成一个标量值，例如<code>select distinct cid from enrolled where grade in (&#39;B&#39;,&#39;C) order by cid</code></p>
+<p>总体来说有两种实现聚合的方法：(1)排序，(2)散列</p>
+<h2 id="Sorting-1"><a href="#Sorting-1" class="headerlink" title="Sorting"></a>Sorting</h2><ul>
+<li>DBMS首先根据group by语句对tuple进行排序，如果buffer pool够用，则直接使用qsort，否则使用外部归并算法。然后DBMS会对排好序的数据进行顺序扫描来计算聚合</li>
+<li>在执行排序聚合，重要是要对查询操作进行排序，以效率最大化。例如：如果查询需要一个过滤器，最好先执行过滤器，然后对过滤后的数据进行排序，以减少数据量</li>
+</ul>
+<h2 id="Hashing"><a href="#Hashing" class="headerlink" title="Hashing"></a>Hashing</h2><ul>
+<li><p>由于在计算聚合的时候，散列的计算成本总是要比排序低得多，所以DBMS在扫描表的时候会填充一个临时的哈希表（ephemeral hash table），对于每一条记录，都会检查哈希表中是否已经有该条目，并且进行适当的修改。如果哈希表太大，DBMS就会将其溢出到磁盘上（？）。完成这个任务有两个阶段：</p>
+<ul>
+<li><p>Phase #1 - Partition：</p>
+<p>使用哈希函数h1，根据目标的hash key将tuple分割到不同的磁盘分区，这样所有匹配的tuple都会被分配到同一片区域，然后DBMS会通过输出缓冲区将分区溢出到磁盘上</p>
+</li>
+<li><p>Phase #2 - ReHash：</p>
+<p>对于磁盘上的每一个分区，将其page读入内存，并且根据第二个哈希函数h2，建立一个哈希表，由此把所有匹配的tuple都聚集到一起。如果hash表太小了以至于无法容纳所有数据，那么可以考虑将当前分区重新进行分割，或者混杂其他基于排序或者基于散列的算法</p>
+</li>
+</ul>
+</li>
+<li><p>在ReHash阶段，DBMS可以将需要输出的聚合存储为（GroupByKey -&gt; RunningValue）的配对，RunningValue的内容取决于聚合函数</p>
+<blockquote>
+<p>例如如果我们想要输出<code>select cid, AVG(gpa) from enrolled</code>，可以将AVG存储为(COUNT,SUM)的形式</p>
+</blockquote>
+</li>
+<li><p>而对于一个新插入的tuple</p>
+<ul>
+<li>如果它能够找到一个匹配的GroupByKey，则适当更新RunningValue</li>
+<li>否则插入一个新的(GroupByKey -&gt; RunningValue)</li>
+</ul>
+</li>
+</ul>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-9/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/NiJiKa.GIF">
+      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
+      <meta itemprop="description" content="琐碎和思考的堆放处">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="CigaCase">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2024/02/28/CMU15-445-2022Fall-Lecture-9/" class="post-title-link" itemprop="url">CMU15-445 2022Fall Lecture 9</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2024-02-28 12:27:24 / 修改时间：12:27:32" itemprop="dateCreated datePublished" datetime="2024-02-28T12:27:24+08:00">2024-02-28</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h1 id="Lecture-9-Index-Concurrency-Control"><a href="#Lecture-9-Index-Concurrency-Control" class="headerlink" title="Lecture 9: Index Concurrency Control"></a>Lecture 9: Index Concurrency Control</h1><p>本章主要介绍了数据库中几种闩锁的概念和简单的实现（非代码）</p>
+<h1 id="Locks-vs-Latches"><a href="#Locks-vs-Latches" class="headerlink" title="Locks vs. Latches"></a>Locks vs. Latches</h1><ul>
+<li>lock<ol>
+<li>保护当前事务的索引内容不会受到其他事务的影响</li>
+<li>lock在整个事务的执行期间都会被持有</li>
+<li>DBMS需要在发生冲突的时候回滚变更</li>
+</ol>
+</li>
+<li>latch<ol>
+<li>保护索引内部数据不会被其他线程影响</li>
+<li>仅在线程对索引进行某个操作的时刻被持有（一般持有时间很短）</li>
+<li>DBMS不需要对数据的更新进行回滚</li>
+<li>latch有两种mode，分别为Read Mode和Write Mode，其中Read Mode可以同时被多个线程持有，但Write Mode不行</li>
+</ol>
+</li>
+</ul>
+<h1 id="Latch-Implementation"><a href="#Latch-Implementation" class="headerlink" title="Latch Implementation"></a>Latch Implementation</h1><h2 id="Blocking-OS-Mutex"><a href="#Blocking-OS-Mutex" class="headerlink" title="Blocking OS Mutex"></a>Blocking OS Mutex</h2><ul>
+<li>依赖OS内置的互斥机制，由<strong>用户空间的自旋latch</strong>以及<strong>OS的互斥锁</strong>组成。当DBMS无法获得用户空间的latch时，会试图进入内核态并获取更加昂贵的mutex，如果还是无法获取，则会被阻塞</li>
+<li>OS mutex在DBMS中不是一个好的选择，因为会被OS介入，而且开销比较大<ul>
+<li>例子：std::mutex  </li>
+<li>优点：使用简单</li>
+<li>缺点：消耗大，不可扩展</li>
+</ul>
+</li>
+</ul>
+<h2 id="Test-and-Set-Spin-Latch-TAS"><a href="#Test-and-Set-Spin-Latch-TAS" class="headerlink" title="Test-and-Set Spin Latch(TAS)"></a>Test-and-Set Spin Latch(TAS)</h2><ul>
+<li>自旋锁比mutex更有效，因为DBMS可以控制自旋锁在无法获取latch的情况下的下一步动作：比如可以继续尝试获取或者允许OS取消调度<ul>
+<li>例子：std::atomic&lt;T&gt;</li>
+<li>优点：上锁更高效，一个<code>std::atomic_flag latch</code>指令即可上锁</li>
+<li>缺点：没有扩展性，对于cache和OS并不友好</li>
+</ul>
+</li>
+</ul>
+<h2 id="Reader-Writer-Latches"><a href="#Reader-Writer-Latches" class="headerlink" title="Reader-Writer Latches"></a>Reader-Writer Latches</h2><ul>
+<li>mutex和自旋锁并不区分读写（对于数据库而言是不好的），DBMS需要一种可以支持并发读取的方法，这样如果程序有大量读取的需求就可以获得更好的效果</li>
+<li>读写锁允许latch以read或者write的mode进行等待，可以跟踪有多少线程持有该latch，以及有多少线程在等待获取latch。对于read锁，我们可以定义其在任何情况下都可以获得这把latch，也可以指定其只有在等待write的线程为空的时候才能获取；对于write锁，则需要等待read锁被全部释放<ul>
+<li>例子：std::shared_mutex</li>
+<li>优点：能够并发读取</li>
+<li>缺点：必须要额外维护两个队列：read线程和write线程以防止饥饿现象，内存开销会更大</li>
+</ul>
+</li>
+</ul>
+<h1 id="Hash-Table-Latching"><a href="#Hash-Table-Latching" class="headerlink" title="Hash Table Latching"></a>Hash Table Latching</h1><ul>
+<li>由于Hash数据结构本身的特性，所有线程在访问的时候都是按照顺序自上而下的，每次也都只会访问一个slot，因此不会出现死锁现象</li>
+<li>按照粒度的大小，Hash Table Latching可以被分成两种：<ul>
+<li>Page Latches：每个Page都用一把大锁锁住，每个线程在访问Page之前获取一个Read或者Write锁，这样的做法会降低程序的并发性，但是由于线程访问每个slot的速度很快，因为只需要一把锁即可实现</li>
+<li>Slot Latches：Page中的每个slot都有自己的锁，所以读写线程可以同时访问一个Page的不同slot，提高了并发度，但同时也增加了存储和计算开销</li>
+</ul>
+</li>
+</ul>
+<h1 id="B-Tree-Latching"><a href="#B-Tree-Latching" class="headerlink" title="B+ Tree Latching"></a>B+ Tree Latching</h1><ul>
+<li>B+树的锁主要为了防止以下问题：<ul>
+<li>不同线程同时修改同一个结点</li>
+<li>当一个线程对结点进行插入&#x2F;删除，导致结点出现了split&#x2F;merge现象时，另一个线程正在遍历树</li>
+</ul>
+</li>
+<li>Latch Crabbing&#x2F;Couping Protocol（锁存耦合协议）允许多个线程并发访问B+树，具体规则如下：<ul>
+<li>获取父节点锁</li>
+<li>获取子结点锁</li>
+<li>如果子结点被认为是安全的（不会发生split、merge、再分配），则释放父节点的锁</li>
+</ul>
+</li>
+<li>Basic Latch Crabbing Protocol<ul>
+<li>Search：从根结点开始向下，获取子结点锁-&gt;释放父节点锁，重复此步骤</li>
+<li>Insert&#x2F;Delete：从根结点向下按需获取x个结点的latch，一旦孩子结点被锁住了，检查是否安全，如果安全，则释放所有祖先的锁</li>
+<li>释放锁的顺序在逻辑上不重要，然而在现实中越靠近根结点的锁需要更先释放，否则会造成性能的下降</li>
+</ul>
+</li>
+<li>Better Latch Crabbing Protocol：<ul>
+<li>在改进的算法中，每一个线程都会默认到达目标结点的路径是安全的，并且以不断抓去Read锁的形式来到达，最终检验是否安全。如果不安全，则停止操作，重新开始，只不过重新遍历会抓去Write锁</li>
+<li>Search：与朴素的算法一致</li>
+<li><strong>Insert&#x2F;Delete</strong>：跟Search一样，不断获取和释放READ latch。最后在叶子结点上设置WRITE latch。如果叶子不安全，则重来，这次用基本算法的思路</li>
+</ul>
+</li>
+<li>Leaf Node Scan<ul>
+<li>前两种算法都是自上而下的，线程无法获取更上一层的锁存器，因此不会出现死锁现象</li>
+<li>然而扫描叶子结点的时候很容易出现死锁，当两个线程以相反的方向遍历到了相邻的叶子结点，就会出现死锁，而Index Latch本身并不支持死锁的检测和预防</li>
+<li>因为，唯一能够解决这个问题的方式就是通过code discipline，叶子结点的兄弟结点的锁存器必须遵循“no wait”原则。B+树必须面对锁存器获取失败的情况，一般会选择终止操作，重新启动</li>
+</ul>
+</li>
+</ul>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-6/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/NiJiKa.GIF">
+      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
+      <meta itemprop="description" content="琐碎和思考的堆放处">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="CigaCase">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2024/02/28/CMU15-445-2022Fall-Lecture-6/" class="post-title-link" itemprop="url">CMU15-445 2022Fall Lecture 6</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2024-02-28 12:27:07 / 修改时间：12:27:14" itemprop="dateCreated datePublished" datetime="2024-02-28T12:27:07+08:00">2024-02-28</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h1 id="Letcure-6-Memory-Management"><a href="#Letcure-6-Memory-Management" class="headerlink" title="Letcure 6: Memory Management"></a>Letcure 6: Memory Management</h1><p>本章主要介绍了数据库中内存管理的相关内容，主要引入了缓冲池的概念</p>
+<h1 id="Introduction"><a href="#Introduction" class="headerlink" title="Introduction"></a>Introduction</h1><p>DBMS的任务就是管理内存以及从磁盘写入写出数据。数据库如果希望对磁盘上的数据进行处理，则必须首先将数据移动到内存中</p>
+<p>因此我们需要设计一个DBMS，满足以下几个要求：</p>
+<ul>
+<li>其能够处理的数据量超出内存的大小</li>
+<li>最小化磁盘上执行查询所带来的低效率问题</li>
+<li>使得所有的操作看起来都像是在磁盘上进行的一样</li>
+</ul>
+<p>这个问题可以从时间上和空间上两个方面来考虑：</p>
+<ul>
+<li><strong>空间上</strong>：我们需要将Page写在磁盘的哪一个部分？这是为了保证数据的空间局部性</li>
+<li><strong>时间上</strong>：我们应该何时进行Page的写入写出？这是为了尽可能减少从磁盘上读取数据的停顿次数</li>
+</ul>
+<h1 id="Buffer-Pool"><a href="#Buffer-Pool" class="headerlink" title="Buffer Pool"></a>Buffer Pool</h1><ul>
+<li>执行引擎在请求Page的时候会先去buffer pool查询，如果没有，则buffer pool会执行替换算法将目标Page换入其中。此时脏页会被写会磁盘，而非脏页会被直接舍弃。可以参考cache在计算机硬件中的作用</li>
+<li>缓冲池是一个从磁盘上读取数据的内存区域，该内存区域被组织称一个个固定大小的页面阵列，被称为frame。每个frame保存的都是磁盘中的一个Page，因此为了方便调度，我们需要Page Table（页表）。</li>
+<li>页表是一个Hash表，用来跟踪处于buffer pool中的Page，我们可以通过页表以及上面的page_id来确认此Page是否还在buffer pool中。当然页表还会记录一些元数据<ul>
+<li>Dirty Flag：标志位，表示这个Page是否被改写过，这是为了保证数据持久化</li>
+<li>Pin Count：正在引用或者正在访问该Page的线程的数量，如果这个meta data非零，那么我们当下就不应该将这个Page驱逐出buffer pool</li>
+</ul>
+</li>
+</ul>
+<h1 id="Lock-vs-Latch"><a href="#Lock-vs-Latch" class="headerlink" title="Lock vs. Latch"></a>Lock vs. Latch</h1><p>由于我们并不希望我们在移动Page的时候被其他线程干扰（比如修改这个Page上的数据），所以我们需要对Page进行上锁操作</p>
+<p>这涉及到了数据库中Lock和Latch的一些区别：</p>
+<ul>
+<li>lock<ol>
+<li>保护当前事务的索引内容不会受到其他事务的影响</li>
+<li>lock在整个事务的执行期间都会被持有</li>
+<li>DBMS需要在发生冲突的时候回滚变更</li>
+</ol>
+</li>
+<li>latch<ol>
+<li>保护索引内部数据不会被其他线程影响</li>
+<li>仅在线程对索引进行某个操作的时刻被持有（一般持有时间很短）</li>
+<li>DBMS不需要对数据的更新进行回滚</li>
+<li>latch有两种mode，分别为Read Mode和Write Mode，其中Read Mode可以同时被多个线程持有，但Write Mode不行</li>
+</ol>
+</li>
+</ul>
+<h1 id="Page-Table-vs-Page-Directory"><a href="#Page-Table-vs-Page-Directory" class="headerlink" title="Page Table vs. Page Directory"></a>Page Table vs. Page Directory</h1><p>这里需要辨析两个概念，页表和页目录虽然看上去很像，但本质上有很大区别：</p>
+<ul>
+<li>Page Table：内存中的一个哈希表，并不需要持久化，即哪怕丢弃了，只需要重新建立一个就行</li>
+<li>Page Directory：从page_id到数据库文件中页面位置的映射，对于页目录的所有改变都必须要记录到磁盘上，以允许DBMS在重启之后能够发现，否则会破坏数据的一致性</li>
+</ul>
+<h1 id="Allocation-Policies"><a href="#Allocation-Policies" class="headerlink" title="Allocation Policies"></a>Allocation Policies</h1><p>数据库中的内存是根据两个策略来分配给buffer pool的</p>
+<ul>
+<li>Global Policies：<br>全局策略处理DBMS应该作出的决定，以有利于正在执行的整个工作负载<br>他考虑到所有活动的事务，以找到分配内存的最佳策略</li>
+<li>Local Policies：<br>本地策略作出的决定会使得单个查询或事务的执行更快<br>本地策略将框架分配给特定的事务而不考虑事务的并发行为</li>
+</ul>
+<h1 id="Buffer-Pool-Optimization"><a href="#Buffer-Pool-Optimization" class="headerlink" title="Buffer Pool Optimization"></a>Buffer Pool Optimization</h1><p>有许多方法可以来优化buffer pool</p>
+<h2 id="Multiple-Buffer-Pool"><a href="#Multiple-Buffer-Pool" class="headerlink" title="Multiple Buffer Pool"></a>Multiple Buffer Pool</h2><p>我们可以分配多块内存区域以支持多个Buffer Pool，每个区域可以有自己的页表，并且自己一套page id和frame的映射关系，这样可以更好地运用局部策略，并且根据不同的类型来分配page的置换策略（例如index或者table data），这样也能减少访问缓存池的不同线程之间对于页表锁的争夺</p>
+<p>有两种办法来将Page映射到不同的buffer pool中：</p>
+<ul>
+<li>Objects IDs：<br>对象ID涉及扩展记录标识(extending the record IDs)，使其具有一个对象标识符(object identifier)。然后，通过对象标识符，可以维持一个从对象到特定缓冲池的映射关系。</li>
+<li>Hashing：<br>哈希也是老生常谈的方法了，不展开</li>
+</ul>
+<h2 id="Pre-Fetching"><a href="#Pre-Fetching" class="headerlink" title="Pre-Fetching"></a>Pre-Fetching</h2><p>DBMS也可以通过基于查询计划的预取页面来进行优化。然后，当第一组页面被处理时，第二组页面可以被预取到缓冲池中。<strong>这种方法是DBMS在连续访问许多页面时常用的</strong></p>
+<h2 id="Scan-Sharing"><a href="#Scan-Sharing" class="headerlink" title="Scan Sharing"></a>Scan Sharing</h2><p>查询游标可以有效减少对于数据的访问</p>
+<blockquote>
+<p>Q1:select sum(val) from A<br>Q2:select avg(val) from A limit 100<br>对于以上两个查询，如果Q1在执行到一半的时候，Q2加入了进来，那么就可以将Q2定位到Q1此时的游标位置，当游标遍历结束之后，Q2再针对前面没有被查询到的数据进行访问</p>
+</blockquote>
+<h2 id="Buffer-Pool-Bypass"><a href="#Buffer-Pool-Bypass" class="headerlink" title="Buffer Pool Bypass"></a>Buffer Pool Bypass</h2><p>对于需要线性读取大量数据的查询操作，可以选择不将获取的页面存储在buffer pool中，可以随意丢弃</p>
+<p>此外，对于中间数据（类似于join和sorting），也可以这么做</p>
+<h1 id="Buffer-Replacement-Policies"><a href="#Buffer-Replacement-Policies" class="headerlink" title="Buffer Replacement Policies"></a>Buffer Replacement Policies</h1><p>buffer pool在写入新页而没有空间时，需要执行evict操作给新页腾位子<br>替换策略的目标是准确性、正确性、并发性、和元数据的开销</p>
+<h2 id="Least-Recently-Used（LRU）"><a href="#Least-Recently-Used（LRU）" class="headerlink" title="Least Recently Used（LRU）"></a>Least Recently Used（LRU）</h2><p>对于缓存池中每个page维护一个时间戳，时间戳记录着每个page最后被访问的时刻。当DBMS需要驱逐（evict）一个page时，选择时间戳最早的page执行驱逐。一般来说我们可以让page按照时间戳排序（优先级队列）以减少搜索的时间。</p>
+<h2 id="Clock"><a href="#Clock" class="headerlink" title="Clock"></a>Clock</h2><p>CLOCK策略是LRU的一个近似值，不需要每页有单独的时间戳。在CLOCK策略中，每个页面被赋予一个参考位。当一个页面被访问时，设置为1<br>为了形象地说明这一点，可以用 “时钟指针 (clock hand)”将页面组织在一个圆形的缓冲区中。在清扫时检查一个页面的位是否被设置为1，如果是，则设置为0，如果不是，则驱逐它。通过这种方式，时钟指针在驱逐之间记住了位置</p>
+<h2 id="Alternative"><a href="#Alternative" class="headerlink" title="Alternative"></a>Alternative</h2><p>无论是LRU还是Clock，都会受到sequential flooding的影响：在进行顺序访问的时候，DBMS会不断把连续的page读入内存，但这些正在使用的page是我们最不想要的（因为我们不过是为了查找到自己想要的page，迫不得已才把之前的page读入buffer pool）<br>有三种方法可以解决LRU和Clock的缺点：</p>
+<ul>
+<li>LRU-K：<br>frame组成的链表被分为两个区域：young list和old list，当old list中的page被再一次访问到，则将其放入young list的头部；而新加入buffer pool的页面会被放入old list的头部<br>它跟踪最后K个引用的历史作为时间戳，并计算出后续访问的间隔。这个历史记录被用来预测一个页面下次被访问的时间</li>
+<li>Localization per Query<br>DBMS跟踪每一个查询的访问情况，在每个查询的基础上选择哪些页面要被驱逐。这使得每次查询对缓冲池的污染最小化</li>
+<li>Priority Hints<br>优先级提示允许事务根据查询执行过程中每个页面的上下文，告诉缓冲池页面是否重要</li>
+</ul>
+<h1 id="Dirty-Page"><a href="#Dirty-Page" class="headerlink" title="Dirty Page"></a>Dirty Page</h1><p>DBMS有两种办法来处理有脏位的页面：</p>
+<ul>
+<li>Fast Path：直接丢弃掉buffer pool中任何非脏页</li>
+<li>Slow Path：将脏页写回磁盘</li>
+</ul>
+<p>避免不必要的页面写回的方法是<strong>后台写入</strong><br>通过后台写入，DBMS可以周期性地通过页表来写回脏页到磁盘上<br>当一个脏页被后台写入，DBMS可以要么将这个page驱逐出去，或者保持其在buffer pool中的位置但是重置其dirty flag</p>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-3-4-5/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/NiJiKa.GIF">
+      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
+      <meta itemprop="description" content="琐碎和思考的堆放处">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="CigaCase">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2024/02/28/CMU15-445-2022Fall-Lecture-3-4-5/" class="post-title-link" itemprop="url">CMU15-445 2022Fall Lecture 3.4.5</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2024-02-28 12:26:32 / 修改时间：12:26:54" itemprop="dateCreated datePublished" datetime="2024-02-28T12:26:32+08:00">2024-02-28</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h1 id="Lecture-3-4-5-Database-Storage-amp-Storage-Model"><a href="#Lecture-3-4-5-Database-Storage-amp-Storage-Model" class="headerlink" title="Lecture 3,4,5: Database Storage &amp; Storage Model"></a>Lecture 3,4,5: Database Storage &amp; Storage Model</h1><p>本章主要介绍了数据库的存储方式以及几种常见的存储模型</p>
+<h1 id="Disk-Oriented-DBMS"><a href="#Disk-Oriented-DBMS" class="headerlink" title="Disk_Oriented DBMS"></a>Disk_Oriented DBMS</h1><ul>
+<li>数据库保存在磁盘上，按照页（page）作为单元进行划分，第一页为目录页，如果想要对数据库进行操作，则首先需要将数据库中的page调度到内存中<ul>
+<li>通过一个保存在内存中的缓冲池（buffer pool）来管理数据在磁盘和内存之间的移动</li>
+<li>DBMS有一个负责查询的执行引擎，缓冲池将page带入内存，并且给执行引擎返回一个指向该page的指针，以确保在执行引擎在对该page进行操作的时候，此page的确存在于该位置</li>
+</ul>
+</li>
+</ul>
+<h1 id="DBMS-vs-OS"><a href="#DBMS-vs-OS" class="headerlink" title="DBMS vs OS"></a>DBMS vs OS</h1><p>DBMS的一个高级设计目标就是：创造一个容量远大于内存的数据库，与此同时并不希望过于频繁地访问数据库，因为访问磁盘的代价很大<br>这就类似于操作系统中的虚拟内存，保证磁盘中的地址空间能够映射到内存中<br>提起磁盘和内存之间数据的迁移，很容易想起mmap，的确曾经有很多DBMS选择使用mmap来执行，然而实际上是会造成一些问题的</p>
+<ol>
+<li>DBMS并不知道哪些page在内存中，而mmap在遇到page fault时会阻塞进程</li>
+<li>OS可以在任何时刻写回脏页，然而OS并不知道哪些page需要在其他page之前写回磁盘，这会造成并发控制方面出现问题<br>尽管有办法解决这方面的问题，但是从性能和安全性两方面考虑，并不建议由操作系统来完成这一任务<br>因此根据Andy所言，由DBMS自己来实现数据的控制是一个更好的选择</li>
+</ol>
+<h1 id="DataBase-Storage"><a href="#DataBase-Storage" class="headerlink" title="DataBase Storage"></a>DataBase Storage</h1><h2 id="File-Storage"><a href="#File-Storage" class="headerlink" title="File Storage"></a>File Storage</h2><p>DBMS使用自己独有的编码形式将数据库作为单个文件或者多层次文件保存在磁盘中，OS对此一无所知<br>DBMS的存储管理器负责管理数据库的文件，它会将这些文件作为一个page的集合，并且追踪哪些数据被读写、这些page有多少可用空间</p>
+<h2 id="DataBase-Page"><a href="#DataBase-Page" class="headerlink" title="DataBase Page"></a>DataBase Page</h2><p>DBMS将数据库文件中固定大小的数据块称为页（page），可以参考OS中的虚拟内存，页面可以包含不同的数据结构（tuple、indexes、log等）<br>在大多数DBMS中，一个page会被要求只能存储一种类型的数据</p>
+<blockquote>
+<p>例如page1只能存储tuple，page2只能存储日志<br>所以，每个page都会被赋予⼀个唯⼀的内部标识符，系统会生成属于page的ID。之后，就会有一个indirection层。indirection层允许将⼀个page ID映射到某个物理位置，即某个文件中的某个位置（类似于一个字典映射，其实就是记录⼀个相对位置，方便文件整体移动后，只要知道整体文件的初始位置，我依然可以通过该相对位置（即page ID）找到某个文件某个位置的数据所对应的page）。这样的话，就可以支持磁盘的压缩或者使用另一块磁盘而不改变page ID。</p>
+</blockquote>
+<h2 id="DataBase-Heap"><a href="#DataBase-Heap" class="headerlink" title="DataBase Heap"></a>DataBase Heap</h2><p>关于page之间是如何进行存储的——<br>堆文件组织是是一个无序的页面集合，是从磁盘上查找我们想要的page地址的一种方法<br>DBMS可以通过使用页面的链接列表或页面目录在磁盘上找到一个给定的页面ID：</p>
+<blockquote>
+<ol>
+<li>Linked List：<br>是一种顺序存储（顺序存储并不意味着有序），这是一种很容易想到的存储方式，然而弊端也是显然的：链表的查询时间复杂度为O（n），效率远不及hash</li>
+<li>Page Directory：<br>可以类比书的目录，每次查询只需要从page directory中获取目标page的偏移量即可，然而弊端在于：必须时刻保证目录与实际page信息的同步。如果往某个page中写入数据，此时page满了，但系统也崩溃了，那么目录中的信息是相对滞后的，在重启系统之后需要有对应策略来重新扫描以维护信息的一致性；如果数据量很大，在极端条件下可能始终无法统一</li>
+</ol>
+</blockquote>
+<h2 id="Page-Layout"><a href="#Page-Layout" class="headerlink" title="Page Layout"></a>Page Layout</h2><p>关于page中的信息是如何存放的——<br>每一个page都有一个页头（header）来存放该page的，譬如页面大小、DBMS版本号之类的相关信息，这些信息被称为元数据（meta data）<br>一般来说数据在page中有2种常见的存储方式：tuple-oriented和log-structured</p>
+<ol>
+<li>tuple storage<br>一种朴素的思想就是将tuple以数组的方式存放，同时header记录page的信息，但这是一个strawman idea：因为当我们删除其中的一个tuple时，会产生内部碎片，导致文件的不连续；如果tuple的长度是不定长的话，这个问题会更加显著。同时tuple的查找也只能够顺序遍历，所以并不推荐</li>
+<li>slotted storage<br>page中除了header以外还有两种数据结构，一种是slot，一种是tuple<br>其中slot从header之后顺序存储，每个slot都保存了对应的tuple在该page中的偏移量；而tuple本身是从page的末尾开始从后往前循序存储。虽然必然会出现一定的内部碎片，然而这是为了处理变长tuple不得不做出的牺牲，当然有些数据库支持对于内部碎片的再整理<br>对于slotted storage，一个tuple的查询需要其所在的page_id和slot_id</li>
+<li>log-structured storage<br>slotted storage依然有很多问题没有能够解决：例如删除tuple的时候会留下空隙、必须从磁盘中读取整个page来获取其中的一个tuple、随机读取的效率很低<br>由此诞生了log-structured storage，这是一种只允许创建新数据而不允许覆盖已有数据的存储方式，DBMS中只会存放日志记录<ul>
+<li>将数据库如何被修改的记录存储到文件中（放入和删除）。每条日志包含tuples的唯一标识符</li>
+<li>要读取一条记录，DBMS会从最新的到最旧的逆向扫描日志文件，并 “重新创建 “这个 tuple。</li>
+<li>写的快，读的可能慢。磁盘写入是连续的，现有的页面是不可改变的，这导致了随机磁盘I&#x2F;O的减少。</li>
+<li>在append-only的存储上工作得很好，因为DBMS不能回溯并更新数据。</li>
+<li>为了避免长时间的读取，DBMS可以有索引来允许它跳到日志中的特定位置。它还可以定期地压缩日志。（如果它有一个tuple，然后对其进行了更新，它可以将其压缩到只插入更新的tuple）</li>
+<li>由于不再需要时间信息，数据库可以将日志压缩到一个按id排序的表中。这些被称为分类字符串表（SSTables），它们可以使tuple搜索非常快。</li>
+<li>紧凑化的问题是，DBMS最终会出现写入放大的情况。（它一次又一次地重写相同的数据）</li>
+</ul>
+</li>
+</ol>
+<h2 id="Tuple-Layout"><a href="#Tuple-Layout" class="headerlink" title="Tuple Layout"></a>Tuple Layout</h2><p>关于tuple的具体结构——<br>其实通过sql的创建table的句式就可以观察出来，tuple本质上是一个字节的序列，DBMS的工作就是将字节的序列翻译成不同的属性和值</p>
+<ul>
+<li>Tuple Header：包含了tuple的元数据<ul>
+<li>DBMS的并发控制协议的可见性信息。关于哪个事务创建&#x2F;修改了该元组</li>
+<li>NULL值的位图</li>
+</ul>
+</li>
+<li>Tuple Data：数据的实际属性<ul>
+<li>属性通常按照你创建表时指定的顺序存储</li>
+<li>大多数DBMS不允许一个tuple超过一个页面的大小</li>
+</ul>
+</li>
+<li>Unique Identifier<ul>
+<li>数据库中的每个tuple都被分配一个唯一的标识符</li>
+<li>一般是：page_id + （offset or slow）</li>
+</ul>
+</li>
+</ul>
+<h1 id="Storage-Model"><a href="#Storage-Model" class="headerlink" title="Storage Model"></a>Storage Model</h1><p>数据库并没有规定应该按照哪一种模型来保存数据，然而在实际操作中，storage model的影响是很大的</p>
+<h2 id="OLTP（On-line-Transaction-Processing）"><a href="#OLTP（On-line-Transaction-Processing）" class="headerlink" title="OLTP（On-line Transaction Processing）"></a>OLTP（On-line Transaction Processing）</h2><p>意思是从外界拿到数据后，只会将其放入数据库中进行简单的查询或者更新，一个具体的例子就是网购的购物车，将购物车中的东西删除、或者新增东西到购物车里，tuple的改变是很小的</p>
+<h2 id="OLAP（On-line-Analytical-Processing）"><a href="#OLAP（On-line-Analytical-Processing）" class="headerlink" title="OLAP（On-line Analytical Processing）"></a>OLAP（On-line Analytical Processing）</h2><p>从数据库中的到数据后不会修改原有的数据，而是希望能够从数据中挖掘出更加深入的信息，例如数据挖掘、数据分析之类的工作，某种意义上OLAP是只读的，并且join的操作很多</p>
+<p>以上两种不同的数据库使用方式就导致诞生了各种数据的存储模型：</p>
+<ol>
+<li>N-ary Storage Model（NSM）<br>简单来说就是一个tuple会保存表中的所有属性，例如（姓名，性别，生日，年龄）作为一个tuple<br>这是一种典型的row storage，并且利好OLTP：因为内容都是顺序排列的，存储粒度足够小，我们可以只关心自己想要的数据<br>但是对于OLAP而言，NSM是灾难性的，显然我们的查询会涉及到很多我们并不想要的数据</li>
+<li>Decomposition Storage Model（DSM）<br>这是一种典型的列存储模型，他将每一个tuple按照属性进行拆分存储，例如姓名作为一个tuple，性别作为第二个tuple……<br>对于列存储而言，每次查询可以只读取某几个属性的值，这对于OLAP是有利的</li>
+</ol>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://example.com/2024/01/14/%E5%8F%9B%E9%80%86/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -473,304 +1435,11 @@
   
   
 
-      
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2023/06/22/%E8%87%AA%E6%88%91%E5%89%96%E6%9E%90%E6%8A%A5%E5%91%8A/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/NiJiKa.GIF">
-      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
-      <meta itemprop="description" content="琐碎和思考的堆放处">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="CigaCase">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          
-            <a href="/2023/06/22/%E8%87%AA%E6%88%91%E5%89%96%E6%9E%90%E6%8A%A5%E5%91%8A/" class="post-title-link" itemprop="url">自我剖析报告</a>
-        </h2>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-calendar"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-              
-
-              <time title="创建时间：2023-06-22 19:42:38 / 修改时间：21:12:37" itemprop="dateCreated datePublished" datetime="2023-06-22T19:42:38+08:00">2023-06-22</time>
-            </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-folder"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/%E7%A2%8E%E7%A2%8E%E5%BF%B5/" itemprop="url" rel="index"><span itemprop="name">碎碎念</span></a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>从外婆家回去的路上，老妈和我谈起了一件家里的琐事——“你外婆啊，真的是很不讲理……”具体内容已经无关紧要了，我也并没有放在心上，只不过老妈说到一半差点没有绷住自己的眼泪，可以看得出她们母女二人之间的确存在着很大的矛盾<br>听完之后我沉默良久，脑海中的一个念头弹了出来，于是整个思维都被这个念头占据</p>
-<blockquote>
-<p>我能够好好地长大成人真是不容易，我的性格在这种环境下还能如此温良真是不容易<br>但是<br>真的是这样吗？</p>
-</blockquote>
-<p>母亲在半路上改变主意，打算和父亲一起去朋友家玩，我于是能够独自回家<br>在路上我始终在剖析自己的心理，越想越觉得自己的心理是扭曲的<br>我暂时不知应该从何处讲起，那就先简单说说我的童年吧</p>
-<p>自打我有记忆开始，大概是幼儿园之前吧，就是外婆照顾的我。她教我识字、吃饭，带我去大润发的儿童乐园玩滑滑梯，给我买喜欢的玩具，领着我吃我当时最喜欢的肯德基。如果当时让我给家里人排名打分，外婆是毫无疑问的第一名。她精明能干，无微不至，就像超人一样……总之，她真的是一个很好的人——仅限于我、以及她平日里偶尔说说话的朋友<br>但她的耐心和大部分的爱似乎只给了我和我的表妹，她的慷慨分享给了与她素昧平生的外人，而蛮横和愤怒几乎都留给了家人和她自己，她对于家人的苛刻超乎了我的想象。早在我记事之前，她大抵和我爸因为某件事情吵得不可开交，受到了她的影响，再加上当时老爸严厉的育儿策略，导致我也曾用“老棺材”这样难听的称呼来指代老爸<br>后来我开始上小学，回到了自己家里居住，逐渐能够分清是非，开始接触到家庭内部的矛盾，我才明白：原来那个超人一般的外婆，并没有我想象中完美；相反，在家人眼中，她是一个蛮不讲理的、斤斤计较的人。如果不是她的咄咄逼人，老爸和外婆家的关系不会直接决裂，甚至连带着与母亲的娘家一起闹掰<br>我现在依然记得自己上小学之前、从外婆家搬回自己家的那个夜晚，自己坐在车上难过了许久，一想到自己不能住在外婆家，就好像要死掉了一样。现在回头看看，如果我在外婆家成长、接受她为人处事的潜移默化的熏陶，那我现在肯定已经成了一个孤僻又难搞的怪人，不得不说当时父母把我接回家教育真是明智之举</p>
-<p>当然了，我自己家的家庭环境也并非什么善茬：我爷爷走得早，父亲的原生家庭也因此出现很大的变故，他对我的教育是打压式的，是冷漠的，导致我年幼的时候对他非常害怕，程度之深，甚至当时看到他就要绕着道走，每次看到他在书房，我都不敢进去，生怕惹到他；另一方面，母亲弱势温良的性格使得她与我一同成为了家里较为弱势的一方——这对我的影响很深，或许我不喜欢与人争斗的性格也是拜她所赐——父亲又因为事业、以及与娘家之间的关系，和我母亲闹得不愉快，其中包含大量的冷暴力、PUA，以及少部分的摔家具（当然，热暴力是没有的）<br>虽然我时常会从一些朋友那里听到他们父母对他们过于严格的约束，而我对此总会拍着胸脯对他们说：“你爸妈应该送来我家，看看什么叫开明的家长。”但我心里清楚，在这个家里长大的我虽然不能说是不幸的，但也绝非幸运的</p>
-<p>似乎有些扯远了，总之，简单了解了我的家庭之后你或许就会明白，我为什么会说“我能够好好地长大成人真是不容易”这句话了<br>就在这样的背景下，我成为了一个扭曲的人</p>
-<p>我在今天之前一直认为，自己的原生家庭虽有矛盾，但是总体来说瑕不掩瑜，今天仔细审视一下，发现这简直就是满目疮痍；我曾一直认为，自己的心理、性格是十分健康的，比我的家人们要好很多，但现在我觉得也不尽如此</p>
-<p>我总是很愤怒：我的愤怒在于，我不理解他人为什么会为了一些细枝末节的琐事争执；我不理解为什么他人会自以为是趾高气昂地指着别人的不幸所导致的后果说三道四；我不理解为什么他们为什么不能够相互理解<br>我总是很谨慎：我的谨慎在于，我不懂得如何用正确的态度回应他人的善意，于是哪怕在说出一句感谢之前我总是要做足思想准备；我不懂得怎样才能让身边的人都放下情绪和睦相处，所以做出每一个举动之前我都要考虑再三会不会引人不快<br>我总是很悲伤：我的悲伤在于，我总觉得没有人会喜欢撕下面具之后自卑又自大的我；我总觉得，身边的不幸接踵而至，连带着我和我在乎的人一起卷入漩涡；我总觉得，自己能够因为恨而逃离原生家庭的魔咒，但他们对我无私的爱总是让我无法割舍</p>
-<p>我活得小心翼翼，因为我明白自己是一个一点就爆的炸药桶，所以我和大部分人都有意保持距离，只有为数不多的一两个人能够让我对他们敞开心扉，但即使是那一两个人，我也不曾和他们提起过今天写在这里的这些话语<br>这样的疏远刻入骨髓，哪怕我现在谈了恋爱，哪怕女朋友真的很喜欢我，对我真的很好，我也只不过觉得要尽可能陪陪她，而没有过要对她掏心掏肺地聊聊自己的想法，就好像只是在照顾一个认识了很多年的邻家妹妹</p>
-<p>我经常和人开玩笑说自己是一个情绪稳定的人，碰到不开心的事情总是自己憋着，然后就想要睡觉，一觉醒来，什么事情都没有了</p>
-<p>其实是假的，我的愤怒我的谨慎我的悲伤不可能从虚无中来，又在没有任何处理的情况下重归虚无。那些说出来怕伤到别人的带刺的不堪入目的话，我并非没有说出，只不过是像回旋镖一样，朝着空无一人的地方丢过去，然后再过不久飞回来打中自己了而已</p>
-<p>在我的生命中不乏善待我的人，其中也有无条件付出自己的爱的人，我很感激他们，真的<br>如果不是他们，我看到的世界会更加阴湿<br>我怀着愧疚，然后装作坦然地接受他们的爱，成为一个更加矛盾的人</p>
-
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
-      
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2023/06/12/%E5%A4%A7%E5%AD%A6%E7%94%9F%E5%BF%83%E7%90%86%E5%81%A5%E5%BA%B7%E5%AF%86%E7%A0%81/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/NiJiKa.GIF">
-      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
-      <meta itemprop="description" content="琐碎和思考的堆放处">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="CigaCase">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          
-            <a href="/2023/06/12/%E5%A4%A7%E5%AD%A6%E7%94%9F%E5%BF%83%E7%90%86%E5%81%A5%E5%BA%B7%E5%AF%86%E7%A0%81/" class="post-title-link" itemprop="url">大学生心理健康密码</a>
-        </h2>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-calendar"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-              
-
-              <time title="创建时间：2023-06-12 18:28:43 / 修改时间：21:07:37" itemprop="dateCreated datePublished" datetime="2023-06-12T18:28:43+08:00">2023-06-12</time>
-            </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-folder"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/%E7%A2%8E%E7%A2%8E%E5%BF%B5/" itemprop="url" rel="index"><span itemprop="name">碎碎念</span></a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <blockquote>
-<p>大学生应当同时必须学会的技能就是期望管理</p>
-</blockquote>
-<p>自从这个学期看破红尘不打算最求绩点之后，日子过得更舒服了，睡觉睡得更踏实了，腰也不酸了腿脚更灵活了。为什么？因为绩点这个东西就是个陷阱——对于那些想要保研出国的同学，毫无疑问这是十分重要的，高绩点不一定能让你申到心仪的学校，但是低绩点一定会让你错失很多机会，对于这群人来说，绩点总是越高越好的，均分总是能上100分就绝不能只拿97分的；但是对于其他打算考研或者根本就没有深造意向的大学生来说，绩点不过是一个可有可无的东西。然而受到幸存者偏差的影响，网络上太多的人晒自己的成绩单，太多的人用绩点来传播焦虑，哪怕这是无心之举，也会导致很多大一新生从入学开始，嘴里念的是绩点，脑子里想的是绩点，拼死拼活地学，为的还是绩点。那么他们最终得到了什么呢？4.0 and perhaps nothing。</p>
-<p>我也不是在宣扬绩点无用论，也不是说死命地卷最终什么都学不到，我只是认为这样的努力本质上还是没有跳出中国初高中应试教育给学生带来的刻板印象，性价比是极低的。我花十个小时去做题，可能最终可能也就是考试成绩提高几分，甚至有可能完全没有提升，我的投入和我的收益完全不在同一个数量级，与此同时我又正好没有保研和留学的想法，那么我在乎的那一分两分的绩点和均分，对我来说就成了无用功。不管是网络还是现实，通过绩点散播焦虑本质上是一场心理学上的博弈，是针对没有自我期望管理能力的大学生们的人生的第一个骗局。</p>
-<p>今天下午，上个学期的成绩就出来了。其实考完试的时候我直觉上就差不多能摸出来自己是个什么分数了，但我对此并没有什么抱怨或者失落，一方面不是那么在乎绩点，另一方面清楚这学期对于知识的掌握程度也就这种程度。说句不那么好听的话：人贵有自知之明，要清楚自己有几斤几两，要了解自己的能力边界在哪里，同时也要摸清自己对未来真正的志向在哪里。虽然有人会说“当局者迷，旁观者清”、“往往最不了解自己的人就是自己”云云，但是就我自身而言，其实我很清楚自己其实在各个方面都是个半吊子，很清楚自己其实是一个三分钟热度很没志气很丧的人，3.7的门槛都摸不到的均绩更是让我放弃了保研的想法——但在某种程度上，我很庆幸，因为这样一来我就从绩点的枷锁中解脱了，不用因为那一分两分而夜不能寐，这是一种逃避心理，我从一个枷锁中解脱，却又不可避免地落入另一个枷锁，但我觉得无可厚非，因为我觉得自己在期望管理上做得很好。</p>
-<p>在出分之后，我刷朋友圈看到某几个其他专业的同届，ta们这学期绩点真的很高很高（其中有些人每个学期的绩点都很高）。我承认自己在看到ta们的成绩单的时候是羡慕的，但是转念一想，这些光鲜亮丽的朋友圈的背后是长时间熬夜和精疲力尽。我不清楚ta们是否经常这样，但我估计这种强度让我承受个一天两天，心理是要出问题的。<br>又恰好在前几天，我去听了南大jyy的操作系统课，发现自己一上来就听不懂，盯着他的课件看了好久，好不容易看懂了一点，再听一会儿课，又回到了懵b的状态。我听了一节课，觉得自己一定是有前置知识课程没有学，我就去问在南大的朋友，了解下来还真是这样，又去看前置课程，又装了好久好久的系统，期间就是失败–&gt;重启–&gt;失败–&gt;重启–&gt;失败。我终于发现自己和同龄人的差距有多大，于是我破防了：前几个学期勤勤恳恳地学了这么久，其实距离真正地融会贯通还要走好长好长的路，其实和身边的同龄人相比有好大好大的差距，其实自己本质上没有学会什么有用的东西，绩点成为了用来自己麻痹自己的毒药，心想着“我这个绩点不算低”，于是悠闲地继续跟着学校那过时而粗糙的教学大纲走自甘堕落，这比我查分时候的失落感要强得多。</p>
-<p>我回想起了大一上课时盯着微积分历年卷狂刷的自己，想起了学会降低期望前那个焦虑的自己，我感到可惜——没有天分、没有养尊处优的环境，这种东西怎样都好，我只是不能接受自己的努力成了笑话，不能接受自己的时间被浪费在了无用的地方</p>
-
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
-      
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2023/06/09/%E8%85%90%E7%83%82/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/NiJiKa.GIF">
-      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
-      <meta itemprop="description" content="琐碎和思考的堆放处">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="CigaCase">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          
-            <a href="/2023/06/09/%E8%85%90%E7%83%82/" class="post-title-link" itemprop="url">花</a>
-        </h2>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-calendar"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-              
-
-              <time title="创建时间：2023-06-09 22:02:32 / 修改时间：22:42:56" itemprop="dateCreated datePublished" datetime="2023-06-09T22:02:32+08:00">2023-06-09</time>
-            </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-folder"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/%E5%8D%81%E4%B8%89%E8%A1%8C%E8%AF%97/" itemprop="url" rel="index"><span itemprop="name">十三行诗</span></a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>一朵凋零了落在地上的花，时间定格在它落地的瞬间<br>任凭微风爱抚它的尸体，如此温柔，就好像生的祝福从未离它而去<br>乌鸦落在它的身边，嘶哑着送出最后的悼词<br>然后随着微风一同离去，把沉寂归还给了那朵花<br>这里没有悲伤<br>因为它将归于尘土，再从中萌发新芽</p>
-<p>一朵凋零了落在地上的花，时间定格在被人拾起的瞬间<br>“多么美丽的花，正适合用来点缀我的头发”<br>风吹拂着花，一道吹起的，是柔顺的长发<br>乌鸦没有出现，因为这不是葬礼<br>它将自身的美丽送给了每一个拾起了它的女孩<br>于是又在未来的某个时间点腐烂，然后归于尘土，再从中萌发新芽<br>所有人都明白<br>死亡不是生命的终点</p>
-<p>一朵凋零了落在地上的花，时间无法定格在它被装在高脚酒杯的瞬间<br>在无数次的梦境中，它遇到了风、乌鸦和女孩<br>酒杯的主人炫耀着这朵世上最美丽的花<br>用红酒一次又一次浇灌着它的枝桠<br>哀嚎不断回荡在镶钻的容器中，却无法向外界传达一分一毫<br>满堂宾客无不欢呼，直到红色的液体淹没了最后一片花瓣<br>沉寂被归还给了花朵<br>这一次，它死了</p>
-
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
-      
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2023/06/06/%E5%BC%80%E5%BC%A0%E5%A4%A7%E5%90%89/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/NiJiKa.GIF">
-      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
-      <meta itemprop="description" content="琐碎和思考的堆放处">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="CigaCase">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          
-            <a href="/2023/06/06/%E5%BC%80%E5%BC%A0%E5%A4%A7%E5%90%89/" class="post-title-link" itemprop="url">开张大吉</a>
-        </h2>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-calendar"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2023-06-06 21:09:18" itemprop="dateCreated datePublished" datetime="2023-06-06T21:09:18+08:00">2023-06-06</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="far fa-calendar-check"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2023-06-12 19:26:45" itemprop="dateModified" datetime="2023-06-12T19:26:45+08:00">2023-06-12</time>
-              </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>花了将近一整天时间来倒腾git，总算把自己专属的Blog做出来了，拍手拍手<br>作为这个网站的第一条（如果不算经典hello world的话），主要来说一说关于这个网站的一些想法</p>
-<h2 id="为什么创建CigaCase"><a href="#为什么创建CigaCase" class="headerlink" title="为什么创建CigaCase"></a>为什么创建CigaCase</h2><p>主要原因是作者经过考试周的高强度鞭笞之后感到一阵空虚（划掉）<br>这段时间我一直处在焦虑之中：我为什么要学计算机？我都学到了什么？我该怎么证明自己的价值……这些问题有些是杞人忧天自作多情，有些确确实实是我迟早需要面对需要思考的问题<br>我总想着，自己活了快20年了，其实并没有什么“想做的事情”，理所当然也就实质上没有“做成哪些事情”，那么我究竟给这个世界留下了什么痕迹呢？<br>我总想着要做些什么来证明自己的能力，却又因为缺乏能力和想象力而束手束脚<br>而在某一天，我逛github的时候发现了某位大佬做的动态二维码转换器，我就觉得：真好啊，真酷啊，我能不能把这个东西运用在自己的生活中呢？于是我突然发觉，自己想学计算机，正是想要避免浪费时间精力在自己不喜欢的事情上，转而将其投入我觉得真的很cooooool的东西上(此外受到了某不知名庞姓大佬的启发)<br>所以我下定决心，一定要搞一个自己的博客，因为这真的很🆒<br>就这样，CigaCase诞生了</p>
-<h2 id="CigaCase的内容"><a href="#CigaCase的内容" class="headerlink" title="CigaCase的内容"></a>CigaCase的内容</h2><p>我对CigaCase的定位是“琐碎和思考的堆放处”，根据几乎可以概括我生活中所有遇得到的事件了（笑）<br>目前的预期是放一些自己平日里的矫情的感慨、列表里受众群体较少的碎碎念、对于争议性话题的看法、学习记录（没错我甚至想要做学习记录的tag，但这个东西大概率会鸽掉）<br>了解我的人都知道我平日里在朋友圈屁话特别多，如果把这些比较正式的东西丢进去，有些格格不入的感觉<br>我想我的思想值得被聚集在一个更加有深度的地方，这就是CigaCase<br>后续可能会加入其他的板块（比如跑团模组的想法之类的）</p>
-<h2 id="为CigaCase名字的由来"><a href="#为CigaCase名字的由来" class="headerlink" title="为CigaCase名字的由来"></a>为CigaCase名字的由来</h2><p>卷烟盒，来自我很喜欢的一本叫《诡秘之主》的网文小说中，主角的随身物品，出场率极高，存在感极强（强烈推荐，虽然文学性比不上正统的小说，但是观感是迄今为止我看的书里面数一数二的）<br>我的网名几乎都用的是：愚者大人的铁质卷烟盒、愚者的铁质卷烟盒、卷卷卷烟盒，也是受这本书的影响<br>其实一开始想用“铁质卷烟盒”的，但是这样的话名字就太长了，没有逼格<br>卷烟盒的英文应该是cigarette case的，但是一样太长了，最终还是选取了ciga和case，不拗口，写出来也蛮好看的<br>在创建博客想域名的时候我就在想，既要体现出自己的特色，又要符合这个网站的设立初衷，那么“卷烟盒”貌似是一个不错的意向——普通而古典的小盒子，打开之后别有洞天（我还挺喜欢这种感觉的）</p>
-<h2 id="CigaCase的构成"><a href="#CigaCase的构成" class="headerlink" title="CigaCase的构成"></a>CigaCase的构成</h2><p>由于现在水平不够，所以基本上是按照网上教程来做的，本质上是个没什么技术含量的东西，但是用到了git相关的东西，我觉得还是有必要学一学用一用的。依稀记得MIT有一门叫做missing-semester的课，讲的都是些国内教学大纲用不到但是实际应用非常有价值的工具和知识点；这门课我看了一半，有时间得补一补，扯远了。<br>框架用的是Hexo，足够简洁，足够高效，一键部署，还有比Hexo更适合初学者的吗？<br>至于其他例如评论之类的功能，暂时还没添加进去的想法，以后可能会有，谁知道呢<br>不过Hexo生成的是静态网页，每次更新页面都要重新生成整个网站，一旦规模变大，就会比较臃肿。以后是否考虑换框架、是否考虑改成动态网页，这都要根据我自身的知识范畴和时间来安排<br>当然了，这种问题目前不在我的担心list上，毕竟小网站很难做大的啦～</p>
-<p>那么开张的感言到此为止，感谢你能看完以上这些碎碎念，我们日后相见（鞠躬🙇）</p>
-
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
 
   
+  <nav class="pagination">
+    <span class="page-number current">1</span><a class="page-number" href="/page/2/">2</a><a class="extend next" rel="next" href="/page/2/"><i class="fa fa-angle-right" aria-label="下一页"></i></a>
+  </nav>
 
 
 
@@ -837,7 +1506,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">8</span>
+          <span class="site-state-item-count">14</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
