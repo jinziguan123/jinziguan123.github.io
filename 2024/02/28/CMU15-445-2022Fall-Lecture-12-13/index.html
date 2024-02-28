@@ -29,17 +29,10 @@
 <meta property="og:site_name" content="CigaCase">
 <meta property="og:description" content="Lecture 12,13: Query Execution主要讲了SQL语句查询执行的相关问题 Processing Model首先是处理模型，定义了数据库中执行查询计划的三种模式，分别是：  Iterator Model Materialization Model vectorization Model  Iterator Model又被称为Volcano Model或者Pipeline Mo">
 <meta property="og:locale" content="zh_CN">
-<meta property="og:image" content="http://example.com/assets/image-20240201152637134.png">
-<meta property="og:image" content="http://example.com/assets/image-20240201154720832.png">
-<meta property="og:image" content="http://example.com/assets/image-20240207151946216.png">
-<meta property="og:image" content="http://example.com/assets/image-20240207175055227.png">
-<meta property="og:image" content="http://example.com/assets/image-20240210150051734.png">
-<meta property="og:image" content="http://example.com/assets/image-20240213171653754.png">
-<meta property="article:published_time" content="2024-02-28T04:28:15.000Z">
-<meta property="article:modified_time" content="2024-02-28T04:29:49.571Z">
+<meta property="article:published_time" content="2024-02-28T04:49:20.000Z">
+<meta property="article:modified_time" content="2024-02-28T04:55:50.120Z">
 <meta property="article:author" content="愚者大人的铁质卷烟盒">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:image" content="http://example.com/assets/image-20240201152637134.png">
 
 <link rel="canonical" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-12-13/">
 
@@ -193,7 +186,7 @@
               <span class="post-meta-item-text">发表于</span>
               
 
-              <time title="创建时间：2024-02-28 12:28:15 / 修改时间：12:29:49" itemprop="dateCreated datePublished" datetime="2024-02-28T12:28:15+08:00">2024-02-28</time>
+              <time title="创建时间：2024-02-28 12:49:20 / 修改时间：12:55:50" itemprop="dateCreated datePublished" datetime="2024-02-28T12:49:20+08:00">2024-02-28</time>
             </span>
 
           
@@ -225,30 +218,27 @@
 <ul>
 <li><p>Iterator Model一共有三种基本的接口：Next()、Open()、Close()</p>
 </li>
-<li><p>该计算将关系代数中的每一种操作都抽象为一个operator，将整个SQL语句构造成一个operator树，这样一来，在进行查询的时候会从树顶向下不断调用next函数，而数据则会被自底向上拉取，下图中向下指的箭头就表示调用Next函数的方向，而向上指的箭头表示返回的数据</p>
+<li><p>该计算将关系代数中的每一种操作都抽象为一个operator，将整个SQL语句构造成一个operator树，这样一来，在进行查询的时候会从树顶向下不断调用next函数，而数据则会被自底向上拉取</p>
 </li>
-</ul>
-<p><img src="/assets/image-20240201152637134.png" alt="image-20240201152637134"></p>
+<li><p>迭代模型的优点：</p>
 <ul>
-<li>迭代模型的优点：<ul>
 <li>简单，每个operator可以单独实现逻辑，达到模块化处理，因此市面上有很多数据库都使用了迭代模型比如：SQLite、MongoDB、Impala、DB2、SQLServer、Greenplum、PostgreSQL、Oracle、MySQL</li>
 </ul>
 </li>
-<li>迭代模型的缺点：<ul>
+<li><p>迭代模型的缺点：</p>
+<ul>
 <li>查询树调用的Next接口次数太多，而且每次调用都指返回一条数据，使得CPU执行效率很低</li>
 <li>Join、Subqueries、Order by等操作经常会阻塞</li>
 </ul>
 </li>
 </ul>
-<h2 id="Materialization-Model"><a href="#Materialization-Model" class="headerlink" title="Materialization Model"></a>Materialization Model</h2><p>物化模型优化了迭代模型的缺点：对于每一个operator，一次性处理所有的输入，处理完之后将所有结果一次性输出：</p>
-<p><img src="/assets/image-20240201154720832.png" alt="image-20240201154720832"></p>
+<h2 id="Materialization-Model"><a href="#Materialization-Model" class="headerlink" title="Materialization Model"></a>Materialization Model</h2><p>物化模型优化了迭代模型的缺点：对于每一个operator，一次性处理所有的输入，处理完之后将所有结果一次性输出</p>
 <p>伪代码看上去和火山模型大差不差，区别只在于每一个operator都会将结果放到一个out列表中，最后进行输出</p>
 <ul>
 <li>物化模型对于OLTP负载更加友好，因为每一个查询所涉及到的数据范围都是较小的，并且调用的函数更少</li>
 <li>因此从另一方面来说，物化模型不适用于OLAP负载（因为OLAP涉及到的中间数据太多）</li>
 </ul>
 <h2 id="Vectorization-Model"><a href="#Vectorization-Model" class="headerlink" title="Vectorization Model"></a>Vectorization Model</h2><p>向量化模型与火山模型类似，对于每一种operator都要实现一种Next()函数，区别在于，向量化模型返回的是一批tuple，而不是火山模型中的一个tuple，可以简单理解成火山模型与物化模型两者的结合</p>
-<p><img src="/assets/image-20240207151946216.png" alt="image-20240207151946216"></p>
 <p>该模型适用于OLAP数据库，使得中间的结果不需要溢出到磁盘，同时也能够减少Next函数的调用次数</p>
 <h1 id="Access-Methods"><a href="#Access-Methods" class="headerlink" title="Access Methods"></a>Access Methods</h1><p>在执行查找的时候，DBMS需要一定的手段去访问叶子结点处的数据</p>
 <p>一共可以分为三种方法</p>
@@ -276,7 +266,6 @@
 <p>这里重点介绍的方法就是Zone Map法，简单来说就是对于查询涉及到的每一个page，都实现处理出一些聚合属性，比如这个page上的MAX、MIN、AVG、SUM、COUNT，这样在查询到来的时候就能够直接进行比较，判断是否值得花时间遍历这个page，达到加速的效果</p>
 <blockquote>
 <p>比如现在我们有如下数据，我们要执行<code>select * from table where val &gt; 600</code>，DBMS拿到了查询指令和Zone Map进行比较，发现这个page的MAX值为400，显然整个page的数据都是我们不需要的，那么直接跳过这个page即可</p>
-<p><img src="/assets/image-20240207175055227.png" alt="image-20240207175055227"></p>
 </blockquote>
 </li>
 </ol>
@@ -323,7 +312,6 @@
 <p>而模型的不同点就在于Worker的形式</p>
 <h2 id="Process-per-Worker"><a href="#Process-per-Worker" class="headerlink" title="Process per Worker"></a>Process per Worker</h2><p>第一种形式是进程模型：给每一个Worker都分配一个进程，由OS负责调度，对于一个查询中的每一个operator，都交给一个Worker来负责执行</p>
 <p>在线程的思想流行之前诞生的很多数据库都是用了这种模型</p>
-<p><img src="/assets/image-20240210150051734.png" alt="image-20240210150051734"></p>
 <p>优点是：其中一个进程的崩溃并不会影响整个系统的崩溃</p>
 <p>缺点是：极度依赖OS的调度，DBMS没有办法做到自行调度工作</p>
 <h2 id="Thread-per-Worker"><a href="#Thread-per-Worker" class="headerlink" title="Thread per Worker"></a>Thread per Worker</h2><p>第二种是线程模型：以线程的形式管理每一个Worker，是如今常用的数据库并行处理模型，DBMS能够主动控制线程的调度，调度算法能够更加灵活</p>
@@ -359,8 +347,7 @@
 </li>
 </ul>
 <h3 id="Vertical"><a href="#Vertical" class="headerlink" title="Vertical"></a>Vertical</h3><p>纵向并行，思想类似于CPU的流水线，在运行一个操作的同时，另一个操作也在准备运行，一旦操作1处理完了一道数据就马上发给下一个操作2，因此不会出现类似于物化模型那样一次性传递一个数组的数据的情况</p>
-<h2 id="Bushy-Parallelism"><a href="#Bushy-Parallelism" class="headerlink" title="Bushy Parallelism"></a>Bushy Parallelism</h2><p>Inter和Intra-Parallelism的结合，上下游之间的不同部分都可以被划分成一个个独立的部分交给一个或几个Worker来处理，如下图</p>
-<p><img src="/assets/image-20240213171653754.png" alt="image-20240213171653754"></p>
+<h2 id="Bushy-Parallelism"><a href="#Bushy-Parallelism" class="headerlink" title="Bushy Parallelism"></a>Bushy Parallelism</h2><p>Inter和Intra-Parallelism的结合，上下游之间的不同部分都可以被划分成一个个独立的部分交给一个或几个Worker来处理</p>
 <h1 id="I-x2F-O-Parallelism"><a href="#I-x2F-O-Parallelism" class="headerlink" title="I&#x2F;O Parallelism"></a>I&#x2F;O Parallelism</h1><p>前面从过程模型的角度，介绍了基于并行查询的操作并行性。这里介绍了I&#x2F;O并行，是一种更加底层的并行方式</p>
 <p>对于单设备来说，I&#x2F;O始终是DBMS的瓶颈，如果能够把I&#x2F;O任务分配到多个设备中并行处理，那么就能够一定程度上突破这个瓶颈</p>
 <p>相关的方法有很多，这里主要介绍了两种：Multi-Disk Parallelism和Database Partitioning</p>
