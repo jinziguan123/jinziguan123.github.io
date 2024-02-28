@@ -398,7 +398,7 @@
               <span class="post-meta-item-text">发表于</span>
               
 
-              <time title="创建时间：2024-02-28 12:49:07 / 修改时间：12:49:09" itemprop="dateCreated datePublished" datetime="2024-02-28T12:49:07+08:00">2024-02-28</time>
+              <time title="创建时间：2024-02-28 12:49:07 / 修改时间：12:57:11" itemprop="dateCreated datePublished" datetime="2024-02-28T12:49:07+08:00">2024-02-28</time>
             </span>
 
           
@@ -448,7 +448,7 @@
 <ul>
 <li><p>假设我们缓冲区大小为B，则我们使用B-2个缓冲区用来装载外表（即外侧遍历的表），用一个缓冲区装载内表，最后一个缓冲区用来输出，写成伪代码如下：</p>
 <blockquote>
-<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> each page pR(Belong to R) <span class="keyword">in</span> <span class="built_in">range</span>(B-<span class="number">2</span>):</span><br><span class="line">	<span class="keyword">for</span> each page pS(Belong to S) <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">1</span>):</span><br><span class="line">		<span class="keyword">for</span> each <span class="built_in">tuple</span> r <span class="keyword">in</span> pR:</span><br><span class="line">		<span class="keyword">for</span> each <span class="built_in">tuple</span> s <span class="keyword">in</span> pS:</span><br><span class="line">  		<span class="keyword">if</span> r matches s then emit</span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> each page pR(Belong to R) <span class="keyword">in</span> <span class="built_in">range</span>(B-<span class="number">2</span>):</span><br><span class="line">	<span class="keyword">for</span> each page pS(Belong to S) <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">1</span>):</span><br><span class="line">		<span class="keyword">for</span> each <span class="built_in">tuple</span> r <span class="keyword">in</span> pR:</span><br><span class="line">		    <span class="keyword">for</span> each <span class="built_in">tuple</span> s <span class="keyword">in</span> pS:</span><br><span class="line">  		        <span class="keyword">if</span> r matches s then emit</span><br></pre></td></tr></table></figure>
 </blockquote>
 </li>
 <li><p>这个算法的IO复杂度为$$M + \lceil M &#x2F; (B-2) \rceil \times N$$</p>
