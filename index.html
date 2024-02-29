@@ -184,7 +184,7 @@
               <span class="post-meta-item-text">发表于</span>
               
 
-              <time title="创建时间：2024-02-29 12:22:46 / 修改时间：12:24:21" itemprop="dateCreated datePublished" datetime="2024-02-29T12:22:46+08:00">2024-02-29</time>
+              <time title="创建时间：2024-02-29 12:22:46 / 修改时间：12:25:04" itemprop="dateCreated datePublished" datetime="2024-02-29T12:22:46+08:00">2024-02-29</time>
             </span>
 
           
@@ -241,8 +241,7 @@
 </ul>
 <h3 id="Single-relation-Query-Planning"><a href="#Single-relation-Query-Planning" class="headerlink" title="Single relation Query Planning"></a>Single relation Query Planning</h3><p>对于这类查找，只需要用简单的启发式方法譬如顺序扫描、二分搜索、索引扫描等就够用了</p>
 <p>具体来说就是将查询拆分成若干个小块，为每一块都生成一个逻辑运算符，为每一个逻辑运算符都生成一组物理运算符，然后依次迭代构建一棵left-deep join tree（就是类似于哈夫曼树一样的结构，两个节点由join作为父节点），这样可以最小化工作量</p>
-<p>这里直接去看课上那个Artist、Album、Appears的例子更加直观，整个搜索的过程就是在不断地[枚举、计算代价]：</p>
-<p><img src="/assets/image-20240228210150632.png" alt="image-20240228210150632"></p>
+<p>这里直接去看课上那个Artist、Album、Appears的例子更加直观，整个搜索的过程就是在不断地[枚举、计算代价]</p>
 <h3 id="Multi-relation-Query-Planning"><a href="#Multi-relation-Query-Planning" class="headerlink" title="Multi-relation Query Planning"></a>Multi-relation Query Planning</h3><p>又分为自顶向下与自底向上两种优化方式，这里重点讲了自顶向下的思路</p>
 <blockquote>
 <p> 比如一个操作的目标是<code>A join B join C</code>，这是我们的目标，也是优化的根节点。接下来需要考虑有哪些方法可以得到这个根节点，比如可以选择<code>Hash_Join(A join B, C)</code>或者<code>SM_Join(A join B, C)</code>两者之间选择一个代价更小的（这里假设hash join代价更小），然后继续决策有哪些方法可以得到hash join这个节点</p>
