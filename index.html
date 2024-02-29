@@ -184,7 +184,7 @@
               <span class="post-meta-item-text">发表于</span>
               
 
-              <time title="创建时间：2024-02-29 12:22:46 / 修改时间：12:23:44" itemprop="dateCreated datePublished" datetime="2024-02-29T12:22:46+08:00">2024-02-29</time>
+              <time title="创建时间：2024-02-29 12:22:46 / 修改时间：12:24:21" itemprop="dateCreated datePublished" datetime="2024-02-29T12:22:46+08:00">2024-02-29</time>
             </span>
 
           
@@ -216,8 +216,7 @@
 </ul>
 </li>
 </ul>
-<h2 id="Logical-VS-Physical-Plans"><a href="#Logical-VS-Physical-Plans" class="headerlink" title="Logical VS. Physical Plans"></a>Logical VS. Physical Plans</h2><p>其实优化查询无非两个步骤：在逻辑上对操作对象进行编排（比如是Join(A,B)还是Join(B,A)，是否要下移谓词等等）、要选择用哪种方式来优化（比如对于nested loop join，是否要更换为nested index join，sort+limit是否要更换为topn算法等等），这就是所谓的逻辑计划与物理计划，下面这张图能够更加直观地解释数据库在执行查询的时候都会做哪些操作</p>
-<p><img src="https://pic4.zhimg.com/80/v2-8fa19e43fb28e16a705e97fcb12351cf_1440w.webp" alt="img"></p>
+<h2 id="Logical-VS-Physical-Plans"><a href="#Logical-VS-Physical-Plans" class="headerlink" title="Logical VS. Physical Plans"></a>Logical VS. Physical Plans</h2><p>其实优化查询无非两个步骤：在逻辑上对操作对象进行编排（比如是Join(A,B)还是Join(B,A)，是否要下移谓词等等）、要选择用哪种方式来优化（比如对于nested loop join，是否要更换为nested index join，sort+limit是否要更换为topn算法等等），这就是所谓的逻辑计划与物理计划</p>
 <h2 id="Heuristics-x2F-Rules"><a href="#Heuristics-x2F-Rules" class="headerlink" title="Heuristics&#x2F;Rules"></a>Heuristics&#x2F;Rules</h2><p>如果两个关系代数表达式 (Relational Algebra Expressions) 如果能产生相同的 tuple 集合，我们就称二者等价。DBMS 可以通过一些 Heuristics&#x2F;Rules 来将关系几何表达式转化成成本更低的等价表达式，从而达到查询优化的目的。这些规则通常试用于所有查询，如：</p>
 <ul>
 <li>Predicate Pushdown</li>
