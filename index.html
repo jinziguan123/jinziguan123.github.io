@@ -159,6 +159,325 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2024/03/14/%E5%A6%82%E4%BD%95%E7%94%A8redis%E5%AE%9E%E7%8E%B0%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/NiJiKa.GIF">
+      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
+      <meta itemprop="description" content="琐碎和思考的堆放处">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="CigaCase">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2024/03/14/%E5%A6%82%E4%BD%95%E7%94%A8redis%E5%AE%9E%E7%8E%B0%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/" class="post-title-link" itemprop="url">如何用Redis实现消息队列</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2024-03-14 15:30:20 / 修改时间：22:11:44" itemprop="dateCreated datePublished" datetime="2024-03-14T15:30:20+08:00">2024-03-14</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E7%AC%94%E8%AE%B0/" itemprop="url" rel="index"><span itemprop="name">笔记</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h1 id="什么是消息队列（MQ）"><a href="#什么是消息队列（MQ）" class="headerlink" title="什么是消息队列（MQ）"></a>什么是消息队列（MQ）</h1><p>顾名思义，将消息以队列的形式缓存，生产者（producer）和消费者（consumer）分别使用队列的两个端口进行消息的收发</p>
+<h2 id="核心能力"><a href="#核心能力" class="headerlink" title="核心能力"></a>核心能力</h2><p>消息队列有两个核心能力：解耦和削峰</p>
+<ul>
+<li><p>解耦：</p>
+<p>如果没有消息队列，那么在一次业务流程中，上游的http或者rpc发出请求之后，下游的消费者需要马上进行反馈，否则整个流程就会一直阻塞，这即浪费时间，又浪费CPU性能</p>
+<p>因此我们需要一个能够持久化存放请求的容器，这就是消息队列的解耦——将生产者和消费者的应用进行解耦</p>
+</li>
+<li><p>削峰</p>
+<p>如果在某一时刻，生产者给消费者生成了大量的请求，而消费者无法一次性全部消费，那么会产生消息的丢失</p>
+<p>而有了消息队列，就可以分批次处理数量过多的请求</p>
+</li>
+</ul>
+<h2 id="基础要求"><a href="#基础要求" class="headerlink" title="基础要求"></a>基础要求</h2><p>作为消息队列组件，需要满足一些要求：</p>
+<ul>
+<li><p>消息不丢失</p>
+<p>很好理解，毕竟如果消息易失，那么有没有消息队列就都没太大区别了，这一方面可以分为三个部分来看待：</p>
+<ul>
+<li>生产者将消息投递到MQ的时候不出现丢失</li>
+<li>消息存放在MQ时不丢失</li>
+<li>消费者从MQ消费消息时不出现丢失</li>
+</ul>
+<p>针对第二点，各个MQ组件基本都是基于数据落盘+数据备份的方式来完成的</p>
+<p>而对于第一第三点，则是通过两个交互环节中的ack机制保证的，譬如生产者向MQ中投递消息，如果没有收到MQ的ack返回确认，那么生产者就应当一直投递这个消息给MQ；另一方面，消费者也需要避免接收重复的消息，所以对于下游的消费者，同样需要具备消息幂等去重的能力</p>
+</li>
+<li><p>支持消息存储</p>
+<p>就像前面提到的，MQ至少需要支持一定规模的数据的存放，而且这种存放需要持久性，能够让消费者自由选择时间进行消费操作</p>
+</li>
+</ul>
+<h2 id="流程类型"><a href="#流程类型" class="headerlink" title="流程类型"></a>流程类型</h2><p>根据消费者的消费流程，MQ可以被分为两种类型：</p>
+<ul>
+<li><p>Push型：</p>
+<p>指当生产者将消息投递到MQ时，由MQ主动将消息以推送的方式发送给各个订阅了的消费者</p>
+</li>
+<li><p>Pull型：</p>
+<p>当MQ中存在消息时，由消费者主动执行拉取消息的操作来获取消息</p>
+</li>
+</ul>
+<p>两种类型各有优劣，实际操作中需要按需取舍</p>
+<h1 id="如何用Redis实现消息队列"><a href="#如何用Redis实现消息队列" class="headerlink" title="如何用Redis实现消息队列"></a>如何用Redis实现消息队列</h1><p>Redis虽然是一种非关系型数据库，但是其部分数据结构是能够支持实现消息队列组件的</p>
+<h2 id="可能存在的问题"><a href="#可能存在的问题" class="headerlink" title="可能存在的问题"></a>可能存在的问题</h2><p>首先需要指出可能存在的一些问题</p>
+<ul>
+<li><p>存储昂贵</p>
+<p>由于Redis是基于内存实现的缓存中间件，所以存储消息容量的限制比较大</p>
+</li>
+<li><p>数据丢失</p>
+<ul>
+<li><p>由于Redis是基于内存实现的缓存中间件，所以不可避免地会产生丢失数据的风险（比如断电和宕机），虽然有rdb&#x2F;aof这种持久化机制，但是无法做到百分百安全</p>
+</li>
+<li><p>此外，Redis走的是ap高可用流派，数据的主从复制流程是异步的，主从切换时数据存在弱一致的问题</p>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="Redis-List"><a href="#Redis-List" class="headerlink" title="Redis List"></a>Redis List</h2><h3 id="具体方法"><a href="#具体方法" class="headerlink" title="具体方法"></a>具体方法</h3><p>一种比较容易想到的思路就是使用Redis的List结构，这是一个双向链表，天然契合MQ的队列模型，只需要使用LPUSH和RPOP进行消息的投递和读取即可</p>
+<p>这种方法的缺点也是显而易见的：如果生产者生产消息的速度赶不上消费者的消费速度，那么消费者使用RPOP拉取消息的时候就会立刻返回空值nil，也就是说，需要消费者不断轮询地访问，这种高频的自旋对于CPU是一种无用的损耗；另一方面，如果让消费者每次轮询之后休眠一段时间，那么可能会导致消息处理不及时，也是我们不希望看到的情况</p>
+<p>最理想的方案是：在List中有数据到达时，消费者马上能够意识到，并且处理数据，此外始终保持睡眠状态，也就是阻塞态</p>
+<p>因此，我们可以使用Redis中的BRPOP指令来代替RPOP，即可弥补上述的缺点</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">BRPOP my_topic 0</span><br></pre></td></tr></table></figure>
+
+<p>其中topic后面的数字代表阻塞等待时长，达到此阈值仍未获取数据时会返回nil；如果设置为 0 ，则代表没有这个超时限制</p>
+<h3 id="局限性分析"><a href="#局限性分析" class="headerlink" title="局限性分析"></a>局限性分析</h3><p>尽管解决了阻塞问题，List仍然不能算是一个合格的消息队列组件，原因如下：</p>
+<ul>
+<li><p>无法支持发布&#x2F;订阅模式</p>
+<p>显然List的消费者和生产者是一对一的，因为数据在POP出去之后就不复存在，只此一份，如果我们有多个消费者，每个都需要消费者所生产的数据，那么List就束手无策了</p>
+</li>
+<li><p>无法支持消费端ack机制</p>
+<p>当消费者出现了宕机等意外，没有一种有效的手段告诉MQ消息处理失败的反馈，在这种情况下，一旦数据POP，就真的完全丢失了</p>
+</li>
+</ul>
+<h2 id="Redis-pub-x2F-sub"><a href="#Redis-pub-x2F-sub" class="headerlink" title="Redis pub&#x2F;sub"></a>Redis pub&#x2F;sub</h2><p>为了解决无法支持发布&#x2F;订阅模式的问题，Redis提供了pub&#x2F;sub机制，全称为publisher&#x2F;subscriber</p>
+<h3 id="具体方法-1"><a href="#具体方法-1" class="headerlink" title="具体方法"></a>具体方法</h3><p>pub&#x2F;sub模式会在两者之间建立一个用于实时通信的信道channel，在传递消息时，会根据channel查找到所有建立订阅关系的subscriber，一一传送消息</p>
+<p>操作指令为：</p>
+<blockquote>
+<p>发布者：publish topic_name message</p>
+<p>比如：publish my_new_message 今天天气怎么样</p>
+<p>订阅者：subscribe topic_name</p>
+<p>订阅者会使用阻塞模式进行监听，解决了List方法中的CPU浪费问题</p>
+</blockquote>
+<p>这里解释一下背后的原理：</p>
+<ul>
+<li>首先，消费方 subscriber 通过 subscribe 指令建立和指定 channel 之间的订阅关系. 这时在 redis 中会维护好 channel 和对应 subscriber 列表的映射关系，并在内存中为每个在线活跃的 subscriber 分配好一个缓冲区 buffer，用以承载后续到来的消息数据</li>
+<li>接下来随着 publisher 执行 publish 指令，往对应 channel 中投递消息后，此时 redis 会实时查看 channel 对应 subscriber 名单，往每个 subscriber 的缓冲区 buffer 中推送这条数据</li>
+<li>各执行了 subscribe 指令的 subscriber 会处于阻塞监听缓冲区 buffer 的状态，随着新数据到达，subscriber 会获取到这笔数据</li>
+</ul>
+<p>基于这个流程，我们能看出来，pub&#x2F;sub 对于 channel 以及 subscribers 之间的实时映射关系存在强依赖. 因此在操作的执行顺序上，我们需要保证先执行 subscribe 指令，再执行 publish 执行，否则前几笔 publish 投递的数据就会因为不存在 subscriber 而被直接丢弃</p>
+<h3 id="优缺点分析"><a href="#优缺点分析" class="headerlink" title="优缺点分析"></a>优缺点分析</h3><p>pub&#x2F;sub模式最大的优点就是实现了发布&#x2F;订阅能力，然而其缺点也很明显：关于消息丢失的处理</p>
+<ul>
+<li><p>缺乏ack机制：</p>
+<p>与List相同，没有ack意味着pub&#x2F;sub模式依然没有办法提醒发布者消息处理的成功与否，无法执行消息的重放</p>
+</li>
+<li><p>缺乏消息储存能力</p>
+<p>Redis的pub&#x2F;sub模式相当于golang中的无缓冲型channel，仅仅是维护了channel和subscribers之间的映射关系，每当消息来临，不会停留在channel中，而是直接送往映射的buffer中，所以会出现以下问题：</p>
+<ul>
+<li>subscriber 宕机：倘若某个 subscriber 中途宕机，则会被踢出名单，在恢复前的这段时间内，到达的消息都会彻底与这个 subscriber 无缘</li>
+<li>Redis 宕机：每条 publish 的消息都会第一时间分发到 subscriber 对应的内存缓冲区中，而这个缓冲区是完全基于内存实现的易失性存储，一旦 Redis 服务端宕机，缓冲区中的数据就完全丢失且不可恢复了；此外，pub&#x2F;sub 模式下的消息数据不属于 Redis 中的基本数据类型，因此 redis 中的持久化机制 rdb 和 aof 对于 pub&#x2F;sub 中的数据是完全不生效的，数据丢失的可能性大幅度提高</li>
+<li>subscriber消息积压：由于消息数据会被放在 Redis 侧各 subscriber 的缓冲区 buffer 中，这部分空间是相对有限的，一旦某个 subscriber 因为消费能力弱，导致 buffer 中的的数据发生积压，此时 Redis 很可能会自动把 subscriber 踢除下线，于是这部分数据也丢失了</li>
+</ul>
+<p>对于最后这一点，可以在redis.conf文件中配置：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">client-output-buffer-limit pubsub 32mb 8mb 60s</span><br></pre></td></tr></table></figure>
+
+<p>对应的含义是，倘若某个 subscriber 的缓冲区 buffer 大小达到 32MB，则 subscriber 会被踢下线；倘若缓冲区内数据量在连续 60s 内达到 8MB 大小，subscriber 也会踢下线</p>
+</li>
+</ul>
+<h2 id="Redis-Streams"><a href="#Redis-Streams" class="headerlink" title="Redis Streams"></a>Redis Streams</h2><h3 id="操作指令"><a href="#操作指令" class="headerlink" title="操作指令"></a>操作指令</h3><p>首先需要介绍一下几个核心的操作指令，所有指令都可以在<a target="_blank" rel="noopener" href="https://redis.io/commands/">官方文档</a>中找到：</p>
+<ul>
+<li><p>生产消息：</p>
+<p>使用该指令可以向topic中投放一组键值对消息</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1:6379&gt; XADD my_streams_topic * key1 value1</span><br><span class="line">&quot;1710412272535-0&quot;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>My_streams_topic：topic名称</li>
+<li>*：表示该消息自动生成唯一标识id，基于时间戳+自增序列号生成</li>
+<li>Key1、value1:输入的键值对</li>
+</ul>
+</li>
+<li><p>消费消息：</p>
+<p>使用该指令可以从对应的topic中获取消息</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1:6379&gt; xread [BLOCK] [Time] streams my_streams_topic 0-0</span><br><span class="line">1) 1) &quot;my_streams_topic&quot;</span><br><span class="line">   2) 1) 1) &quot;1710412272535-0&quot;</span><br><span class="line">         2) 1) &quot;key1&quot;</span><br><span class="line">            2) &quot;value1&quot;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>BLOCK：表示是否使用阻塞消费模式</li>
+<li>Time：如果加入BLOCK参数，那么此处需要填写time表示阻塞等待时间，超过这个时间就会返回nil；设置为0表示不设置超时阈值</li>
+<li>streams：表示从一个streams对象读取消息</li>
+<li>my_streams_topic：topic名称</li>
+<li>0-0：表示从头开始消费；这里如果填写的是某条消息的id的话，就会从这条消息之后开始消费</li>
+</ul>
+</li>
+</ul>
+<p>此外streams支持发布&#x2F;订阅模式，可以保证消息被多个消费者组访问</p>
+<ul>
+<li><p>创建消费者组：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1:6379&gt; XGROUP CREATE my_streams_topic my_group 0-0</span><br><span class="line">OK</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>my_streams_topic：topic 名称</li>
+<li>my_group：消费者组名称</li>
+<li>0-0：从头开始消费</li>
+</ul>
+</li>
+<li><p>基于消费者组消费信息：</p>
+<p>同一份数据在同一个消费者组下只会被消费到一次. 不同消费者组各自能获取到独立完整的消息数据</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1:6379&gt; XREADGROUP GROUP my_group consumer1 BLOCK 0 STREAMS my_streams_topic &gt;</span><br><span class="line">1) 1) &quot;my_streams_topic&quot;</span><br><span class="line">   2) 1) 1) &quot;1710412272535-0&quot;</span><br><span class="line">         2) 1) &quot;key1&quot;</span><br><span class="line">            2) &quot;value1&quot;</span><br><span class="line">      2) 1) &quot;1710413025712-0&quot;</span><br><span class="line">         2) 1) &quot;key2&quot;</span><br><span class="line">            2) &quot;value2&quot;</span><br><span class="line">      3) 1) &quot;1710413031719-0&quot;</span><br><span class="line">         2) 1) &quot;key3&quot;</span><br><span class="line">            2) &quot;value3&quot;</span><br><span class="line">      4) 1) &quot;1710413036009-0&quot;</span><br><span class="line">         2) 1) &quot;key4&quot;</span><br><span class="line">            2) &quot;value4&quot;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>my_group: 消费者组名称</li>
+<li>Consumer1：消费者名称</li>
+<li>my_streams_topic：topic 名称</li>
+<li>BLOCK 0: 采用阻塞等待的模式，0 代表没有超时上限</li>
+<li>&gt;：读最新的消息 (尚未分配给某个 consumer 的消息)</li>
+</ul>
+<p>此外还有一种消费模式，读取的是已经分配给当前消费者，但是还未经确认的旧消息：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1:6379&gt; XREADGROUP GROUP my_group consumer1 BLOCK 0 STREAMS my_streams_topic 0-0</span><br><span class="line">1) 1) &quot;my_streams_topic&quot;</span><br><span class="line">   2) 1) 1) &quot;1710413250364-0&quot;</span><br><span class="line">         2) 1) &quot;key5&quot;</span><br><span class="line">            2) &quot;value5&quot;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>0-0：标识读取已分配给当前 consumer ，但是还没经过 xack 指令确认的消息</li>
+</ul>
+<p><strong>&gt; 与 0-0，两者之间的区别在于，“&gt;”读取新消息，“0-0”读取旧消息</strong></p>
+</li>
+<li><p>确认消息：</p>
+<p>通过 xack 指令，携带上消费者组、topic 名称以及消息 id，能够完成对某条消息的确认操作</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1:6379&gt; XACK my_streams_topic my_group 1710413250364-0</span><br><span class="line">(integer) 1</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>my_streams_topic：topic 名称</li>
+<li>my_group：消费者组名称</li>
+<li>1710413250364-0：消息 id</li>
+</ul>
+</li>
+</ul>
+<h2 id="优缺点分析-1"><a href="#优缺点分析-1" class="headerlink" title="优缺点分析"></a>优缺点分析</h2><p>首先是最明显的优点：</p>
+<ul>
+<li><p>支持发布&#x2F;订阅模式</p>
+<p>Redis Streams 引入了消费者组 group 的概念，因此是能够保证各个消费者组 consumer group 均能够获取到一份独立而完整的消息数据</p>
+</li>
+<li><p>数据可持久化</p>
+<p>Redis 中的 streams 和 string、list 等数据类型一样，都能够通过 rdb( redis database)、aof( append only file) 的持久化机制进行落盘存储，能够在很大程度上降低数据丢失的概率</p>
+</li>
+<li><p>支持消费端 ack 机制</p>
+<p>Redis Streams 中另一项非常重要的改进，是支持 consumer 的 ack 能力，consumer 在处理好某条消息后，能通过 xack 指令对该消息进行确认。这样对于没经过 ack 确认的消息，Redis Streams 还是为 consumer 保留了重新消费的能力</p>
+</li>
+<li><p>支持消息缓存</p>
+<p>和 pub&#x2F;sub 模式不同的是，Redis Streams 中会实际开辟内存空间用于存储 Streams 中的数据，因此哪怕某个 consumer group 是在消息生产之后才完成注册操作，也能够进行消息溯源，从 topic 起点开始执行消息的消费操作</p>
+<p>然而由于Redis是基于内存实现的存储，因此如果消息量过于庞大，可能会造成很大的资源压力甚至out of memory。因此，可以在XADD指令中加上maxlen，显式地设定topic中能缓存的数据长度</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">XADD my_topic MAXLEN 10000 * key1 value1</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>最多缓存10000条数据</li>
+</ul>
+</li>
+</ul>
+<h1 id="整体对比"><a href="#整体对比" class="headerlink" title="整体对比"></a>整体对比</h1><p>现在对Redis实现MQ的各个方法做个比较：</p>
+<table>
+<thead>
+<tr>
+<th><strong>MQ 实现方案</strong></th>
+<th><strong>发布&#x2F;订阅能力</strong></th>
+<th><strong>消费端ACK机制</strong></th>
+<th><strong>消息缓存能力</strong></th>
+<th><strong>数据丢失风险</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>List</td>
+<td>不支持</td>
+<td>不支持</td>
+<td>支持</td>
+<td>低</td>
+</tr>
+<tr>
+<td>pub&#x2F;sub</td>
+<td>支持</td>
+<td>不支持</td>
+<td>不支持</td>
+<td>高</td>
+</tr>
+<tr>
+<td>Streams</td>
+<td>支持</td>
+<td>支持</td>
+<td>支持</td>
+<td>低</td>
+</tr>
+</tbody></table>
+<p>可以看到，在各项能力上 List 和 pub&#x2F;sub 互有千秋，而 Streams 可以说是兼具了各方面的优势，称得上是已经趋近于成熟的MQ实现方案</p>
+<p>下面我们再进一步拿 Redis Streams 和业界专业的 MQ 组件进行对比</p>
+<table>
+<thead>
+<tr>
+<th><strong>MQ组件</strong></th>
+<th><strong>消息存储介质</strong></th>
+<th><strong>消息分区&#x2F;并发能力</strong></th>
+<th><strong>数据丢失风险</strong></th>
+<th><strong>运维成本</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Redis Streams</td>
+<td>内存</td>
+<td>不支持</td>
+<td>低</td>
+<td>低</td>
+</tr>
+<tr>
+<td>Kafka</td>
+<td>磁盘</td>
+<td>支持</td>
+<td>理论上不存在</td>
+<td>偏高</td>
+</tr>
+</tbody></table>
+<p>由于Redis Streams在存储上需要使用内存，因此消息存储容量相对有限；且同一个 topic 的数据由于对应为同一个 key，因此会被分发到相同节点，无法实现数据的纵向分治，因此不具备类似于 kafka 纵向分区以提高并发度的能力</p>
+<p>因此使用Redis作为MQ的主要优势就在于运维成本低，如果在实际的业务流程中，对于数据的精度没有特别高的要求，那么使用Redis Streams这种轻量化的MQ方案不失为一种好的选择</p>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://example.com/2024/02/29/CMU15-445-2022Fall-Lecture-14/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -1496,87 +1815,6 @@
   
   
 
-      
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2023/08/06/%E9%9B%BE%E9%83%BD%E5%B0%8F%E8%AE%B0/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/NiJiKa.GIF">
-      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
-      <meta itemprop="description" content="琐碎和思考的堆放处">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="CigaCase">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          
-            <a href="/2023/08/06/%E9%9B%BE%E9%83%BD%E5%B0%8F%E8%AE%B0/" class="post-title-link" itemprop="url">雾都小记</a>
-        </h2>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-calendar"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2023-08-06 20:10:28" itemprop="dateCreated datePublished" datetime="2023-08-06T20:10:28+08:00">2023-08-06</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="far fa-calendar-check"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2024-02-28 13:00:35" itemprop="dateModified" datetime="2024-02-28T13:00:35+08:00">2024-02-28</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-folder"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/%E6%B8%B8%E8%AE%B0/" itemprop="url" rel="index"><span itemprop="name">游记</span></a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>昨晚到家匆匆忙忙，飞机误点加上打车软件的背刺，回到家已经是半夜一两点的事情了。今早又不紧不慢地睡到十点左右起床清空行李箱，出去吃顿饭剪个头发，半个下午也就没了，回到家又要做题，吃完晚饭再和父亲唠两句，等到真的空下来了，也已经是夜里了</p>
-<p>一下子从旅行的状态里回来，一时间还真有点不习惯，而既然现在自己已经闲了下来，那么也是时候写一下姗姗来迟的游记了</p>
-<p>我这个人很少旅行，倒也不是不喜欢，只是单纯地很懒：懒得赶路，懒得做攻略，懒得离开能够给我带来足够安全感的独属于自己的房间<br>我去过的地方虽然不算多，却也不算少得可怜——当然绝大多数都是江浙沪包邮地区，类似于台州、南京、苏州之类的小地方<br>虽说我最近几年也出去到某个地方游山玩水过，但直到最近我才意识到：当我准备从大脑的某个角落里搜寻出自己曾经在这些那些地方的所见所闻所感，将其清洁一下，端上名为回忆的货架重新贩卖时，这商品却已经破损不堪，程度之深以至于我甚至没有办法从记忆的碎片中提取出一点旅途中无关紧要的琐事细细品味，只能够任凭抽象的诸如“那片海滩”、“那座山”来强迫自己抢回几片尚未被时间偷走的拼图<br>怕是要怪罪我年纪轻轻就有了少年痴呆的迹象，又或是要归咎于自己不解风情不善于用文字和照片记录下人生仅此一次的风景，总之，过去那几段国内也好国外也罢，我本以为能够给将来的自己留下深刻印象的旅途，如今看来却是完美地没能够完成它的历史使命</p>
-<p>旅行的意义在于：能够在为期几天的时间里逃离一成不变的日子、能够在已经被日常晒成灰黑的视网膜上重新泼上色彩、能够见识远在习以为常的世界之外更加遥远的世界<br>我知道像我曾经走马观花的旅行不过是一种浪费，手机里长时间打开的游戏更是对时间的辜负，长此以往，旅行就失去了乐趣，而失去了乐趣的娱乐活动，其本身的价值也就一落千丈<br>我不希望自己事到如今依旧犯下和数年前一样的错误，所以这次的雾都之旅，我尽可能地自己去想、去规划、去见证，不仅仅是把视线放在热门的景点，更多的是关注重庆整座城市的犄角旮旯和不经意间的一瞥。我感到自己的灵魂终于没有再被沪上的安逸所束缚，江南的温柔如水也终究还是被川渝的火辣所替代——何尝不是一种比单纯的打卡式旅游更加能够放松和充实自己的手段</p>
-<p>坐拥8万平方公里，3千万常住人口的雾都并不吝啬它的气魄，也同样不在乎外来者的存在。走在洪崖洞和解放碑附近的街道上，熙攘的人群淹没小小的个体，找不到自己的锚点；而环顾四周，无处不充斥着年轻人的气息，又仿佛看到了身为他们其中一份子的自己的位置<br>重庆这座城，无论横着走还是竖着走，无论上坡路还是下坡路，都令人胆战心惊——每当抬头，眼眸中倒映着的是看不到尽头的高楼；每当远眺，又觉得自己已经走了相当长的路聊以慰藉，不知不觉又陷入了名为征服的好胜心之中<br>不比上海灯红酒绿纸醉金迷的诱惑，重庆的魅力在于，你明明知道与眼前的荣华富贵相隔一条街道的地方就是几乎空无一人的老旧广场，你明明当下这人头攒动的名胜附近有着格格不入的烂尾楼，你明明知道山顶有着最美丽的鸟瞰视角而上山的路很远走起来很累，你明明知道重庆会不加掩饰地把光鲜与破败揉在一起粗暴地展现在你面前，却仍愿意迈开步子被它吞没，短暂地成为它的一部分，揭下它的面纱<br>最后在登上飞机之前向这座距离家乡一千五百多公里的城市道别，我心中长期以来心里莫名的包袱才终于放下：</p>
-<blockquote>
-<p><em>或许在过去的数年间的旅途中，我从未真正离开过上海</em><br><em>但至少这一次除外</em></p>
-</blockquote>
-
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
 
   
   <nav class="pagination">
@@ -1648,7 +1886,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">15</span>
+          <span class="site-state-item-count">16</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1661,7 +1899,7 @@
       <div class="site-state-item site-state-tags">
             <a href="/tags/">
           
-        <span class="site-state-item-count">4</span>
+        <span class="site-state-item-count">5</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>

@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+  <link rel="stylesheet" href="/lib/pace/pace-theme-flash.min.css">
+  <script src="/lib/pace/pace.min.js"></script>
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"example.com","root":"/","scheme":"Muse","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="什么是消息队列（MQ）顾名思义，将消息以队列的形式缓存，生产者（producer）和消费者（consumer）分别使用队列的两个端口进行消息的收发 核心能力消息队列有两个核心能力：解耦和削峰  解耦： 如果没有消息队列，那么在一次业务流程中，上游的http或者rpc发出请求之后，下游的消费者需要马上进行反馈，否则整个流程就会一直阻塞，这即浪费时间，又浪费CPU性能 因此我们需要一个能够持久化存放请">
+<meta property="og:type" content="article">
+<meta property="og:title" content="如何用Redis实现消息队列">
+<meta property="og:url" content="http://example.com/2024/03/14/%E5%A6%82%E4%BD%95%E7%94%A8redis%E5%AE%9E%E7%8E%B0%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/index.html">
+<meta property="og:site_name" content="CigaCase">
+<meta property="og:description" content="什么是消息队列（MQ）顾名思义，将消息以队列的形式缓存，生产者（producer）和消费者（consumer）分别使用队列的两个端口进行消息的收发 核心能力消息队列有两个核心能力：解耦和削峰  解耦： 如果没有消息队列，那么在一次业务流程中，上游的http或者rpc发出请求之后，下游的消费者需要马上进行反馈，否则整个流程就会一直阻塞，这即浪费时间，又浪费CPU性能 因此我们需要一个能够持久化存放请">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2024-03-14T07:30:20.000Z">
+<meta property="article:modified_time" content="2024-03-14T14:11:44.415Z">
+<meta property="article:author" content="愚者大人的铁质卷烟盒">
+<meta property="article:tag" content="Redis">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://example.com/2024/03/14/%E5%A6%82%E4%BD%95%E7%94%A8redis%E5%AE%9E%E7%8E%B0%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-CN'
+  };
+</script>
+
+  <title>如何用Redis实现消息队列 | CigaCase</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">CigaCase</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2024/03/14/%E5%A6%82%E4%BD%95%E7%94%A8redis%E5%AE%9E%E7%8E%B0%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/NiJiKa.GIF">
+      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
+      <meta itemprop="description" content="琐碎和思考的堆放处">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="CigaCase">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          如何用Redis实现消息队列
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2024-03-14 15:30:20 / 修改时间：22:11:44" itemprop="dateCreated datePublished" datetime="2024-03-14T15:30:20+08:00">2024-03-14</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E7%AC%94%E8%AE%B0/" itemprop="url" rel="index"><span itemprop="name">笔记</span></a>
+                </span>
+            </span>
+
+          
+            <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv" style="display: none;">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-eye"></i>
+              </span>
+              <span class="post-meta-item-text">阅读次数：</span>
+              <span id="busuanzi_value_page_pv"></span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h1 id="什么是消息队列（MQ）"><a href="#什么是消息队列（MQ）" class="headerlink" title="什么是消息队列（MQ）"></a>什么是消息队列（MQ）</h1><p>顾名思义，将消息以队列的形式缓存，生产者（producer）和消费者（consumer）分别使用队列的两个端口进行消息的收发</p>
+<h2 id="核心能力"><a href="#核心能力" class="headerlink" title="核心能力"></a>核心能力</h2><p>消息队列有两个核心能力：解耦和削峰</p>
+<ul>
+<li><p>解耦：</p>
+<p>如果没有消息队列，那么在一次业务流程中，上游的http或者rpc发出请求之后，下游的消费者需要马上进行反馈，否则整个流程就会一直阻塞，这即浪费时间，又浪费CPU性能</p>
+<p>因此我们需要一个能够持久化存放请求的容器，这就是消息队列的解耦——将生产者和消费者的应用进行解耦</p>
+</li>
+<li><p>削峰</p>
+<p>如果在某一时刻，生产者给消费者生成了大量的请求，而消费者无法一次性全部消费，那么会产生消息的丢失</p>
+<p>而有了消息队列，就可以分批次处理数量过多的请求</p>
+</li>
+</ul>
+<h2 id="基础要求"><a href="#基础要求" class="headerlink" title="基础要求"></a>基础要求</h2><p>作为消息队列组件，需要满足一些要求：</p>
+<ul>
+<li><p>消息不丢失</p>
+<p>很好理解，毕竟如果消息易失，那么有没有消息队列就都没太大区别了，这一方面可以分为三个部分来看待：</p>
+<ul>
+<li>生产者将消息投递到MQ的时候不出现丢失</li>
+<li>消息存放在MQ时不丢失</li>
+<li>消费者从MQ消费消息时不出现丢失</li>
+</ul>
+<p>针对第二点，各个MQ组件基本都是基于数据落盘+数据备份的方式来完成的</p>
+<p>而对于第一第三点，则是通过两个交互环节中的ack机制保证的，譬如生产者向MQ中投递消息，如果没有收到MQ的ack返回确认，那么生产者就应当一直投递这个消息给MQ；另一方面，消费者也需要避免接收重复的消息，所以对于下游的消费者，同样需要具备消息幂等去重的能力</p>
+</li>
+<li><p>支持消息存储</p>
+<p>就像前面提到的，MQ至少需要支持一定规模的数据的存放，而且这种存放需要持久性，能够让消费者自由选择时间进行消费操作</p>
+</li>
+</ul>
+<h2 id="流程类型"><a href="#流程类型" class="headerlink" title="流程类型"></a>流程类型</h2><p>根据消费者的消费流程，MQ可以被分为两种类型：</p>
+<ul>
+<li><p>Push型：</p>
+<p>指当生产者将消息投递到MQ时，由MQ主动将消息以推送的方式发送给各个订阅了的消费者</p>
+</li>
+<li><p>Pull型：</p>
+<p>当MQ中存在消息时，由消费者主动执行拉取消息的操作来获取消息</p>
+</li>
+</ul>
+<p>两种类型各有优劣，实际操作中需要按需取舍</p>
+<h1 id="如何用Redis实现消息队列"><a href="#如何用Redis实现消息队列" class="headerlink" title="如何用Redis实现消息队列"></a>如何用Redis实现消息队列</h1><p>Redis虽然是一种非关系型数据库，但是其部分数据结构是能够支持实现消息队列组件的</p>
+<h2 id="可能存在的问题"><a href="#可能存在的问题" class="headerlink" title="可能存在的问题"></a>可能存在的问题</h2><p>首先需要指出可能存在的一些问题</p>
+<ul>
+<li><p>存储昂贵</p>
+<p>由于Redis是基于内存实现的缓存中间件，所以存储消息容量的限制比较大</p>
+</li>
+<li><p>数据丢失</p>
+<ul>
+<li><p>由于Redis是基于内存实现的缓存中间件，所以不可避免地会产生丢失数据的风险（比如断电和宕机），虽然有rdb&#x2F;aof这种持久化机制，但是无法做到百分百安全</p>
+</li>
+<li><p>此外，Redis走的是ap高可用流派，数据的主从复制流程是异步的，主从切换时数据存在弱一致的问题</p>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="Redis-List"><a href="#Redis-List" class="headerlink" title="Redis List"></a>Redis List</h2><h3 id="具体方法"><a href="#具体方法" class="headerlink" title="具体方法"></a>具体方法</h3><p>一种比较容易想到的思路就是使用Redis的List结构，这是一个双向链表，天然契合MQ的队列模型，只需要使用LPUSH和RPOP进行消息的投递和读取即可</p>
+<p>这种方法的缺点也是显而易见的：如果生产者生产消息的速度赶不上消费者的消费速度，那么消费者使用RPOP拉取消息的时候就会立刻返回空值nil，也就是说，需要消费者不断轮询地访问，这种高频的自旋对于CPU是一种无用的损耗；另一方面，如果让消费者每次轮询之后休眠一段时间，那么可能会导致消息处理不及时，也是我们不希望看到的情况</p>
+<p>最理想的方案是：在List中有数据到达时，消费者马上能够意识到，并且处理数据，此外始终保持睡眠状态，也就是阻塞态</p>
+<p>因此，我们可以使用Redis中的BRPOP指令来代替RPOP，即可弥补上述的缺点</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">BRPOP my_topic 0</span><br></pre></td></tr></table></figure>
+
+<p>其中topic后面的数字代表阻塞等待时长，达到此阈值仍未获取数据时会返回nil；如果设置为 0 ，则代表没有这个超时限制</p>
+<h3 id="局限性分析"><a href="#局限性分析" class="headerlink" title="局限性分析"></a>局限性分析</h3><p>尽管解决了阻塞问题，List仍然不能算是一个合格的消息队列组件，原因如下：</p>
+<ul>
+<li><p>无法支持发布&#x2F;订阅模式</p>
+<p>显然List的消费者和生产者是一对一的，因为数据在POP出去之后就不复存在，只此一份，如果我们有多个消费者，每个都需要消费者所生产的数据，那么List就束手无策了</p>
+</li>
+<li><p>无法支持消费端ack机制</p>
+<p>当消费者出现了宕机等意外，没有一种有效的手段告诉MQ消息处理失败的反馈，在这种情况下，一旦数据POP，就真的完全丢失了</p>
+</li>
+</ul>
+<h2 id="Redis-pub-x2F-sub"><a href="#Redis-pub-x2F-sub" class="headerlink" title="Redis pub&#x2F;sub"></a>Redis pub&#x2F;sub</h2><p>为了解决无法支持发布&#x2F;订阅模式的问题，Redis提供了pub&#x2F;sub机制，全称为publisher&#x2F;subscriber</p>
+<h3 id="具体方法-1"><a href="#具体方法-1" class="headerlink" title="具体方法"></a>具体方法</h3><p>pub&#x2F;sub模式会在两者之间建立一个用于实时通信的信道channel，在传递消息时，会根据channel查找到所有建立订阅关系的subscriber，一一传送消息</p>
+<p>操作指令为：</p>
+<blockquote>
+<p>发布者：publish topic_name message</p>
+<p>比如：publish my_new_message 今天天气怎么样</p>
+<p>订阅者：subscribe topic_name</p>
+<p>订阅者会使用阻塞模式进行监听，解决了List方法中的CPU浪费问题</p>
+</blockquote>
+<p>这里解释一下背后的原理：</p>
+<ul>
+<li>首先，消费方 subscriber 通过 subscribe 指令建立和指定 channel 之间的订阅关系. 这时在 redis 中会维护好 channel 和对应 subscriber 列表的映射关系，并在内存中为每个在线活跃的 subscriber 分配好一个缓冲区 buffer，用以承载后续到来的消息数据</li>
+<li>接下来随着 publisher 执行 publish 指令，往对应 channel 中投递消息后，此时 redis 会实时查看 channel 对应 subscriber 名单，往每个 subscriber 的缓冲区 buffer 中推送这条数据</li>
+<li>各执行了 subscribe 指令的 subscriber 会处于阻塞监听缓冲区 buffer 的状态，随着新数据到达，subscriber 会获取到这笔数据</li>
+</ul>
+<p>基于这个流程，我们能看出来，pub&#x2F;sub 对于 channel 以及 subscribers 之间的实时映射关系存在强依赖. 因此在操作的执行顺序上，我们需要保证先执行 subscribe 指令，再执行 publish 执行，否则前几笔 publish 投递的数据就会因为不存在 subscriber 而被直接丢弃</p>
+<h3 id="优缺点分析"><a href="#优缺点分析" class="headerlink" title="优缺点分析"></a>优缺点分析</h3><p>pub&#x2F;sub模式最大的优点就是实现了发布&#x2F;订阅能力，然而其缺点也很明显：关于消息丢失的处理</p>
+<ul>
+<li><p>缺乏ack机制：</p>
+<p>与List相同，没有ack意味着pub&#x2F;sub模式依然没有办法提醒发布者消息处理的成功与否，无法执行消息的重放</p>
+</li>
+<li><p>缺乏消息储存能力</p>
+<p>Redis的pub&#x2F;sub模式相当于golang中的无缓冲型channel，仅仅是维护了channel和subscribers之间的映射关系，每当消息来临，不会停留在channel中，而是直接送往映射的buffer中，所以会出现以下问题：</p>
+<ul>
+<li>subscriber 宕机：倘若某个 subscriber 中途宕机，则会被踢出名单，在恢复前的这段时间内，到达的消息都会彻底与这个 subscriber 无缘</li>
+<li>Redis 宕机：每条 publish 的消息都会第一时间分发到 subscriber 对应的内存缓冲区中，而这个缓冲区是完全基于内存实现的易失性存储，一旦 Redis 服务端宕机，缓冲区中的数据就完全丢失且不可恢复了；此外，pub&#x2F;sub 模式下的消息数据不属于 Redis 中的基本数据类型，因此 redis 中的持久化机制 rdb 和 aof 对于 pub&#x2F;sub 中的数据是完全不生效的，数据丢失的可能性大幅度提高</li>
+<li>subscriber消息积压：由于消息数据会被放在 Redis 侧各 subscriber 的缓冲区 buffer 中，这部分空间是相对有限的，一旦某个 subscriber 因为消费能力弱，导致 buffer 中的的数据发生积压，此时 Redis 很可能会自动把 subscriber 踢除下线，于是这部分数据也丢失了</li>
+</ul>
+<p>对于最后这一点，可以在redis.conf文件中配置：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">client-output-buffer-limit pubsub 32mb 8mb 60s</span><br></pre></td></tr></table></figure>
+
+<p>对应的含义是，倘若某个 subscriber 的缓冲区 buffer 大小达到 32MB，则 subscriber 会被踢下线；倘若缓冲区内数据量在连续 60s 内达到 8MB 大小，subscriber 也会踢下线</p>
+</li>
+</ul>
+<h2 id="Redis-Streams"><a href="#Redis-Streams" class="headerlink" title="Redis Streams"></a>Redis Streams</h2><h3 id="操作指令"><a href="#操作指令" class="headerlink" title="操作指令"></a>操作指令</h3><p>首先需要介绍一下几个核心的操作指令，所有指令都可以在<a target="_blank" rel="noopener" href="https://redis.io/commands/">官方文档</a>中找到：</p>
+<ul>
+<li><p>生产消息：</p>
+<p>使用该指令可以向topic中投放一组键值对消息</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1:6379&gt; XADD my_streams_topic * key1 value1</span><br><span class="line">&quot;1710412272535-0&quot;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>My_streams_topic：topic名称</li>
+<li>*：表示该消息自动生成唯一标识id，基于时间戳+自增序列号生成</li>
+<li>Key1、value1:输入的键值对</li>
+</ul>
+</li>
+<li><p>消费消息：</p>
+<p>使用该指令可以从对应的topic中获取消息</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1:6379&gt; xread [BLOCK] [Time] streams my_streams_topic 0-0</span><br><span class="line">1) 1) &quot;my_streams_topic&quot;</span><br><span class="line">   2) 1) 1) &quot;1710412272535-0&quot;</span><br><span class="line">         2) 1) &quot;key1&quot;</span><br><span class="line">            2) &quot;value1&quot;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>BLOCK：表示是否使用阻塞消费模式</li>
+<li>Time：如果加入BLOCK参数，那么此处需要填写time表示阻塞等待时间，超过这个时间就会返回nil；设置为0表示不设置超时阈值</li>
+<li>streams：表示从一个streams对象读取消息</li>
+<li>my_streams_topic：topic名称</li>
+<li>0-0：表示从头开始消费；这里如果填写的是某条消息的id的话，就会从这条消息之后开始消费</li>
+</ul>
+</li>
+</ul>
+<p>此外streams支持发布&#x2F;订阅模式，可以保证消息被多个消费者组访问</p>
+<ul>
+<li><p>创建消费者组：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1:6379&gt; XGROUP CREATE my_streams_topic my_group 0-0</span><br><span class="line">OK</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>my_streams_topic：topic 名称</li>
+<li>my_group：消费者组名称</li>
+<li>0-0：从头开始消费</li>
+</ul>
+</li>
+<li><p>基于消费者组消费信息：</p>
+<p>同一份数据在同一个消费者组下只会被消费到一次. 不同消费者组各自能获取到独立完整的消息数据</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1:6379&gt; XREADGROUP GROUP my_group consumer1 BLOCK 0 STREAMS my_streams_topic &gt;</span><br><span class="line">1) 1) &quot;my_streams_topic&quot;</span><br><span class="line">   2) 1) 1) &quot;1710412272535-0&quot;</span><br><span class="line">         2) 1) &quot;key1&quot;</span><br><span class="line">            2) &quot;value1&quot;</span><br><span class="line">      2) 1) &quot;1710413025712-0&quot;</span><br><span class="line">         2) 1) &quot;key2&quot;</span><br><span class="line">            2) &quot;value2&quot;</span><br><span class="line">      3) 1) &quot;1710413031719-0&quot;</span><br><span class="line">         2) 1) &quot;key3&quot;</span><br><span class="line">            2) &quot;value3&quot;</span><br><span class="line">      4) 1) &quot;1710413036009-0&quot;</span><br><span class="line">         2) 1) &quot;key4&quot;</span><br><span class="line">            2) &quot;value4&quot;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>my_group: 消费者组名称</li>
+<li>Consumer1：消费者名称</li>
+<li>my_streams_topic：topic 名称</li>
+<li>BLOCK 0: 采用阻塞等待的模式，0 代表没有超时上限</li>
+<li>&gt;：读最新的消息 (尚未分配给某个 consumer 的消息)</li>
+</ul>
+<p>此外还有一种消费模式，读取的是已经分配给当前消费者，但是还未经确认的旧消息：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1:6379&gt; XREADGROUP GROUP my_group consumer1 BLOCK 0 STREAMS my_streams_topic 0-0</span><br><span class="line">1) 1) &quot;my_streams_topic&quot;</span><br><span class="line">   2) 1) 1) &quot;1710413250364-0&quot;</span><br><span class="line">         2) 1) &quot;key5&quot;</span><br><span class="line">            2) &quot;value5&quot;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>0-0：标识读取已分配给当前 consumer ，但是还没经过 xack 指令确认的消息</li>
+</ul>
+<p><strong>&gt; 与 0-0，两者之间的区别在于，“&gt;”读取新消息，“0-0”读取旧消息</strong></p>
+</li>
+<li><p>确认消息：</p>
+<p>通过 xack 指令，携带上消费者组、topic 名称以及消息 id，能够完成对某条消息的确认操作</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1:6379&gt; XACK my_streams_topic my_group 1710413250364-0</span><br><span class="line">(integer) 1</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>my_streams_topic：topic 名称</li>
+<li>my_group：消费者组名称</li>
+<li>1710413250364-0：消息 id</li>
+</ul>
+</li>
+</ul>
+<h2 id="优缺点分析-1"><a href="#优缺点分析-1" class="headerlink" title="优缺点分析"></a>优缺点分析</h2><p>首先是最明显的优点：</p>
+<ul>
+<li><p>支持发布&#x2F;订阅模式</p>
+<p>Redis Streams 引入了消费者组 group 的概念，因此是能够保证各个消费者组 consumer group 均能够获取到一份独立而完整的消息数据</p>
+</li>
+<li><p>数据可持久化</p>
+<p>Redis 中的 streams 和 string、list 等数据类型一样，都能够通过 rdb( redis database)、aof( append only file) 的持久化机制进行落盘存储，能够在很大程度上降低数据丢失的概率</p>
+</li>
+<li><p>支持消费端 ack 机制</p>
+<p>Redis Streams 中另一项非常重要的改进，是支持 consumer 的 ack 能力，consumer 在处理好某条消息后，能通过 xack 指令对该消息进行确认。这样对于没经过 ack 确认的消息，Redis Streams 还是为 consumer 保留了重新消费的能力</p>
+</li>
+<li><p>支持消息缓存</p>
+<p>和 pub&#x2F;sub 模式不同的是，Redis Streams 中会实际开辟内存空间用于存储 Streams 中的数据，因此哪怕某个 consumer group 是在消息生产之后才完成注册操作，也能够进行消息溯源，从 topic 起点开始执行消息的消费操作</p>
+<p>然而由于Redis是基于内存实现的存储，因此如果消息量过于庞大，可能会造成很大的资源压力甚至out of memory。因此，可以在XADD指令中加上maxlen，显式地设定topic中能缓存的数据长度</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">XADD my_topic MAXLEN 10000 * key1 value1</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>最多缓存10000条数据</li>
+</ul>
+</li>
+</ul>
+<h1 id="整体对比"><a href="#整体对比" class="headerlink" title="整体对比"></a>整体对比</h1><p>现在对Redis实现MQ的各个方法做个比较：</p>
+<table>
+<thead>
+<tr>
+<th><strong>MQ 实现方案</strong></th>
+<th><strong>发布&#x2F;订阅能力</strong></th>
+<th><strong>消费端ACK机制</strong></th>
+<th><strong>消息缓存能力</strong></th>
+<th><strong>数据丢失风险</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>List</td>
+<td>不支持</td>
+<td>不支持</td>
+<td>支持</td>
+<td>低</td>
+</tr>
+<tr>
+<td>pub&#x2F;sub</td>
+<td>支持</td>
+<td>不支持</td>
+<td>不支持</td>
+<td>高</td>
+</tr>
+<tr>
+<td>Streams</td>
+<td>支持</td>
+<td>支持</td>
+<td>支持</td>
+<td>低</td>
+</tr>
+</tbody></table>
+<p>可以看到，在各项能力上 List 和 pub&#x2F;sub 互有千秋，而 Streams 可以说是兼具了各方面的优势，称得上是已经趋近于成熟的MQ实现方案</p>
+<p>下面我们再进一步拿 Redis Streams 和业界专业的 MQ 组件进行对比</p>
+<table>
+<thead>
+<tr>
+<th><strong>MQ组件</strong></th>
+<th><strong>消息存储介质</strong></th>
+<th><strong>消息分区&#x2F;并发能力</strong></th>
+<th><strong>数据丢失风险</strong></th>
+<th><strong>运维成本</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Redis Streams</td>
+<td>内存</td>
+<td>不支持</td>
+<td>低</td>
+<td>低</td>
+</tr>
+<tr>
+<td>Kafka</td>
+<td>磁盘</td>
+<td>支持</td>
+<td>理论上不存在</td>
+<td>偏高</td>
+</tr>
+</tbody></table>
+<p>由于Redis Streams在存储上需要使用内存，因此消息存储容量相对有限；且同一个 topic 的数据由于对应为同一个 key，因此会被分发到相同节点，无法实现数据的纵向分治，因此不具备类似于 kafka 纵向分区以提高并发度的能力</p>
+<p>因此使用Redis作为MQ的主要优势就在于运维成本低，如果在实际的业务流程中，对于数据的精度没有特别高的要求，那么使用Redis Streams这种轻量化的MQ方案不失为一种好的选择</p>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Redis/" rel="tag"># Redis</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2024/02/29/CMU15-445-2022Fall-Lecture-14/" rel="prev" title="CMU15-445 2022Fall Lecture 14">
+      <i class="fa fa-chevron-left"></i> CMU15-445 2022Fall Lecture 14
+    </a></div>
+      <div class="post-nav-item"></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+    
+  <div class="comments">
+    <div id="lv-container" data-id="city" data-uid="MTAyMC81ODU4MS8zNTA0Mw=="></div>
+  </div>
+  
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E4%BB%80%E4%B9%88%E6%98%AF%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97%EF%BC%88MQ%EF%BC%89"><span class="nav-number">1.</span> <span class="nav-text">什么是消息队列（MQ）</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E8%83%BD%E5%8A%9B"><span class="nav-number">1.1.</span> <span class="nav-text">核心能力</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%9F%BA%E7%A1%80%E8%A6%81%E6%B1%82"><span class="nav-number">1.2.</span> <span class="nav-text">基础要求</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%B5%81%E7%A8%8B%E7%B1%BB%E5%9E%8B"><span class="nav-number">1.3.</span> <span class="nav-text">流程类型</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#%E5%A6%82%E4%BD%95%E7%94%A8Redis%E5%AE%9E%E7%8E%B0%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97"><span class="nav-number">2.</span> <span class="nav-text">如何用Redis实现消息队列</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%8F%AF%E8%83%BD%E5%AD%98%E5%9C%A8%E7%9A%84%E9%97%AE%E9%A2%98"><span class="nav-number">2.1.</span> <span class="nav-text">可能存在的问题</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Redis-List"><span class="nav-number">2.2.</span> <span class="nav-text">Redis List</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%85%B7%E4%BD%93%E6%96%B9%E6%B3%95"><span class="nav-number">2.2.1.</span> <span class="nav-text">具体方法</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%B1%80%E9%99%90%E6%80%A7%E5%88%86%E6%9E%90"><span class="nav-number">2.2.2.</span> <span class="nav-text">局限性分析</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Redis-pub-x2F-sub"><span class="nav-number">2.3.</span> <span class="nav-text">Redis pub&#x2F;sub</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%85%B7%E4%BD%93%E6%96%B9%E6%B3%95-1"><span class="nav-number">2.3.1.</span> <span class="nav-text">具体方法</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BC%98%E7%BC%BA%E7%82%B9%E5%88%86%E6%9E%90"><span class="nav-number">2.3.2.</span> <span class="nav-text">优缺点分析</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Redis-Streams"><span class="nav-number">2.4.</span> <span class="nav-text">Redis Streams</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%93%8D%E4%BD%9C%E6%8C%87%E4%BB%A4"><span class="nav-number">2.4.1.</span> <span class="nav-text">操作指令</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%BC%98%E7%BC%BA%E7%82%B9%E5%88%86%E6%9E%90-1"><span class="nav-number">2.5.</span> <span class="nav-text">优缺点分析</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#%E6%95%B4%E4%BD%93%E5%AF%B9%E6%AF%94"><span class="nav-number">3.</span> <span class="nav-text">整体对比</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="愚者大人的铁质卷烟盒"
+      src="/images/NiJiKa.GIF">
+  <p class="site-author-name" itemprop="name">愚者大人的铁质卷烟盒</p>
+  <div class="site-description" itemprop="description">琐碎和思考的堆放处</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">16</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">4</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/jinziguan123" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;jinziguan123" rel="noopener" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:18917950960@163.com" title="E-Mail → mailto:18917950960@163.com" rel="noopener" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2024</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">愚者大人的铁质卷烟盒</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> 强力驱动
+  </div>
+
+
+    <script async src="//dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+    <span id="busuanzi_container_site_pv">总访问量<span id="busuanzi_value_site_pv"></span>次</span>
+    <span class="post-meta-divider">|</span>
+    <span id="busuanzi_container_site_uv">总访客数<span id="busuanzi_value_site_uv"></span>人</span>
+    <span class="post-meta-divider">|</span>
+<!-- 不蒜子计数初始值纠正 -->
+<script>
+$(document).ready(function() {
+
+    var int = setInterval(fixCount, 50);  // 50ms周期检测函数
+    var countOffset = 20000;  // 初始化首次数据
+
+    function fixCount() {            
+       if (document.getElementById("busuanzi_container_site_pv").style.display != "none")
+        {
+            $("#busuanzi_value_site_pv").html(parseInt($("#busuanzi_value_site_pv").html()) + countOffset); 
+            clearInterval(int);
+        }                  
+        if ($("#busuanzi_container_site_pv").css("display") != "none")
+        {
+            $("#busuanzi_value_site_uv").html(parseInt($("#busuanzi_value_site_uv").html()) + countOffset); // 加上初始数据 
+            clearInterval(int); // 停止检测
+        }  
+    }
+       	
+});
+</script> 
+
+
+        
+<div class="busuanzi-count">
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+    <span class="post-meta-item" id="busuanzi_container_site_uv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+<script>
+NexT.utils.loadComments(document.querySelector('#lv-container'), () => {
+  window.livereOptions = {
+    refer: location.pathname.replace(CONFIG.root, '').replace('index.html', '')
+  };
+  (function(d, s) {
+    var j, e = d.getElementsByTagName(s)[0];
+    if (typeof LivereTower === 'function') { return; }
+    j = d.createElement(s);
+    j.src = 'https://cdn-city.livere.com/js/embed.dist.js';
+    j.async = true;
+    e.parentNode.insertBefore(j, e);
+  })(document, 'script');
+});
+</script>
+
+</body>
+</html>
