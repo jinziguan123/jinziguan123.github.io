@@ -22,19 +22,19 @@
     var CONFIG = {"hostname":"example.com","root":"/","scheme":"Muse","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
   </script>
 
-  <meta name="description" content="花了将近一整天时间来倒腾git，总算把自己专属的Blog做出来了，拍手拍手作为这个网站的第一条（如果不算经典hello world的话），主要来说一说关于这个网站的一些想法 为什么创建CigaCase主要原因是作者经过考试周的高强度鞭笞之后感到一阵空虚（划掉）这段时间我一直处在焦虑之中：我为什么要学计算机？我都学到了什么？我该怎么证明自己的价值……这些问题有些是杞人忧天自作多情，有些确确实实是我迟">
+  <meta name="description" content="Lecture 15: Concurrency Control Theory主要介绍了并发控制的原理 Transaction Managment首先是一些常见的数据库事务上会出现的并发问题： 比如对于以下一系列操作： 12345Read(A)Check(A &gt; 25)Pay(25)A &#x3D; A - 25Write(A)   如果执行到A &#x3D; A - 25的时候，突然发生了断电，那么很">
 <meta property="og:type" content="article">
-<meta property="og:title" content="开张大吉">
-<meta property="og:url" content="http://example.com/2023/06/06/%E5%BC%80%E5%BC%A0%E5%A4%A7%E5%90%89/index.html">
+<meta property="og:title" content="CMU15-445-2022Fall-Lecture-15">
+<meta property="og:url" content="http://example.com/2024/03/16/CMU15-445-2022Fall-Lecture-15/index.html">
 <meta property="og:site_name" content="CigaCase">
-<meta property="og:description" content="花了将近一整天时间来倒腾git，总算把自己专属的Blog做出来了，拍手拍手作为这个网站的第一条（如果不算经典hello world的话），主要来说一说关于这个网站的一些想法 为什么创建CigaCase主要原因是作者经过考试周的高强度鞭笞之后感到一阵空虚（划掉）这段时间我一直处在焦虑之中：我为什么要学计算机？我都学到了什么？我该怎么证明自己的价值……这些问题有些是杞人忧天自作多情，有些确确实实是我迟">
+<meta property="og:description" content="Lecture 15: Concurrency Control Theory主要介绍了并发控制的原理 Transaction Managment首先是一些常见的数据库事务上会出现的并发问题： 比如对于以下一系列操作： 12345Read(A)Check(A &gt; 25)Pay(25)A &#x3D; A - 25Write(A)   如果执行到A &#x3D; A - 25的时候，突然发生了断电，那么很">
 <meta property="og:locale" content="zh_CN">
-<meta property="article:published_time" content="2023-06-06T13:09:18.000Z">
-<meta property="article:modified_time" content="2024-03-16T08:48:28.800Z">
+<meta property="article:published_time" content="2024-03-16T11:50:06.000Z">
+<meta property="article:modified_time" content="2024-03-16T11:50:23.108Z">
 <meta property="article:author" content="愚者大人的铁质卷烟盒">
 <meta name="twitter:card" content="summary">
 
-<link rel="canonical" href="http://example.com/2023/06/06/%E5%BC%80%E5%BC%A0%E5%A4%A7%E5%90%89/">
+<link rel="canonical" href="http://example.com/2024/03/16/CMU15-445-2022Fall-Lecture-15/">
 
 
 <script id="page-configurations">
@@ -47,7 +47,7 @@
   };
 </script>
 
-  <title>开张大吉 | CigaCase</title>
+  <title>CMU15-445-2022Fall-Lecture-15 | CigaCase</title>
   
 
 
@@ -162,7 +162,7 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2023/06/06/%E5%BC%80%E5%BC%A0%E5%A4%A7%E5%90%89/">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2024/03/16/CMU15-445-2022Fall-Lecture-15/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="image" content="/images/NiJiKa.GIF">
@@ -175,7 +175,7 @@
     </span>
       <header class="post-header">
         <h1 class="post-title" itemprop="name headline">
-          开张大吉
+          CMU15-445-2022Fall-Lecture-15
         </h1>
 
         <div class="post-meta">
@@ -184,24 +184,9 @@
                 <i class="far fa-calendar"></i>
               </span>
               <span class="post-meta-item-text">发表于</span>
+              
 
-              <time title="创建时间：2023-06-06 21:09:18" itemprop="dateCreated datePublished" datetime="2023-06-06T21:09:18+08:00">2023-06-06</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="far fa-calendar-check"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2024-03-16 16:48:28" itemprop="dateModified" datetime="2024-03-16T16:48:28+08:00">2024-03-16</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-folder"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/%E7%A2%8E%E7%A2%8E%E5%BF%B5/" itemprop="url" rel="index"><span itemprop="name">碎碎念</span></a>
-                </span>
+              <time title="创建时间：2024-03-16 19:50:06 / 修改时间：19:50:23" itemprop="dateCreated datePublished" datetime="2024-03-16T19:50:06+08:00">2024-03-16</time>
             </span>
 
           
@@ -222,12 +207,63 @@
     <div class="post-body" itemprop="articleBody">
 
       
-        <p>花了将近一整天时间来倒腾git，总算把自己专属的Blog做出来了，拍手拍手<br>作为这个网站的第一条（如果不算经典hello world的话），主要来说一说关于这个网站的一些想法</p>
-<h2 id="为什么创建CigaCase"><a href="#为什么创建CigaCase" class="headerlink" title="为什么创建CigaCase"></a>为什么创建CigaCase</h2><p>主要原因是作者经过考试周的高强度鞭笞之后感到一阵空虚（划掉）<br>这段时间我一直处在焦虑之中：我为什么要学计算机？我都学到了什么？我该怎么证明自己的价值……这些问题有些是杞人忧天自作多情，有些确确实实是我迟早需要面对需要思考的问题<br>我总想着，自己活了快20年了，其实并没有什么“想做的事情”，理所当然也就实质上没有“做成哪些事情”，那么我究竟给这个世界留下了什么痕迹呢？<br>我总想着要做些什么来证明自己的能力，却又因为缺乏能力和想象力而束手束脚<br>而在某一天，我逛github的时候发现了某位大佬做的动态二维码转换器，我就觉得：真好啊，真酷啊，我能不能把这个东西运用在自己的生活中呢？于是我突然发觉，自己想学计算机，正是想要避免浪费时间精力在自己不喜欢的事情上，转而将其投入我觉得真的很cooooool的东西上(此外受到了某不知名庞姓大佬的启发)<br>所以我下定决心，一定要搞一个自己的博客，因为这真的很🆒<br>就这样，CigaCase诞生了</p>
-<h2 id="CigaCase的内容"><a href="#CigaCase的内容" class="headerlink" title="CigaCase的内容"></a>CigaCase的内容</h2><p>我对CigaCase的定位是“琐碎和思考的堆放处”，根据几乎可以概括我生活中所有遇得到的事件了（笑）<br>目前的预期是放一些自己平日里的矫情的感慨、列表里受众群体较少的碎碎念、对于争议性话题的看法、学习记录（没错我甚至想要做学习记录的tag，但这个东西大概率会鸽掉）<br>了解我的人都知道我平日里在朋友圈屁话特别多，如果把这些比较正式的东西丢进去，有些格格不入的感觉<br>我想我的思想值得被聚集在一个更加有深度的地方，这就是CigaCase<br>后续可能会加入其他的板块（比如跑团模组的想法之类的）</p>
-<h2 id="为CigaCase名字的由来"><a href="#为CigaCase名字的由来" class="headerlink" title="为CigaCase名字的由来"></a>为CigaCase名字的由来</h2><p>卷烟盒，来自我很喜欢的一本叫《诡秘之主》的网文小说中，主角的随身物品，出场率极高，存在感极强（强烈推荐，虽然文学性比不上正统的小说，但是观感是迄今为止我看的书里面数一数二的）<br>我的网名几乎都用的是：愚者大人的铁质卷烟盒、愚者的铁质卷烟盒、卷卷卷烟盒，也是受这本书的影响<br>其实一开始想用“铁质卷烟盒”的，但是这样的话名字就太长了，没有逼格<br>卷烟盒的英文应该是cigarette case的，但是一样太长了，最终还是选取了ciga和case，不拗口，写出来也蛮好看的<br>在创建博客想域名的时候我就在想，既要体现出自己的特色，又要符合这个网站的设立初衷，那么“卷烟盒”貌似是一个不错的意向——普通而古典的小盒子，打开之后别有洞天（我还挺喜欢这种感觉的）</p>
-<h2 id="CigaCase的构成"><a href="#CigaCase的构成" class="headerlink" title="CigaCase的构成"></a>CigaCase的构成</h2><p>由于现在水平不够，所以基本上是按照网上教程来做的，本质上是个没什么技术含量的东西，但是用到了git相关的东西，我觉得还是有必要学一学用一用的。依稀记得MIT有一门叫做missing-semester的课，讲的都是些国内教学大纲用不到但是实际应用非常有价值的工具和知识点；这门课我看了一半，有时间得补一补，扯远了。<br>框架用的是Hexo，足够简洁，足够高效，一键部署，还有比Hexo更适合初学者的吗？<br>至于其他例如评论之类的功能，暂时还没添加进去的想法，以后可能会有，谁知道呢<br>不过Hexo生成的是静态网页，每次更新页面都要重新生成整个网站，一旦规模变大，就会比较臃肿。以后是否考虑换框架、是否考虑改成动态网页，这都要根据我自身的知识范畴和时间来安排<br>当然了，这种问题目前不在我的担心list上，毕竟小网站很难做大的啦～</p>
-<p>那么开张的感言到此为止，感谢你能看完以上这些碎碎念，我们日后相见（鞠躬🙇）</p>
+        <h1 id="Lecture-15-Concurrency-Control-Theory"><a href="#Lecture-15-Concurrency-Control-Theory" class="headerlink" title="Lecture 15: Concurrency Control Theory"></a>Lecture 15: Concurrency Control Theory</h1><p>主要介绍了并发控制的原理</p>
+<h1 id="Transaction-Managment"><a href="#Transaction-Managment" class="headerlink" title="Transaction Managment"></a>Transaction Managment</h1><p>首先是一些常见的数据库事务上会出现的并发问题：</p>
+<p>比如对于以下一系列操作：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Read(A)</span><br><span class="line">Check(A &gt; 25)</span><br><span class="line">Pay(25)</span><br><span class="line">A = A - 25</span><br><span class="line">Write(A)</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>如果执行到A &#x3D; A - 25的时候，突然发生了断电，那么很有可能银行就收不到钱（这个其实和恢复系统有关系）</li>
+<li>如果某个人同时执行了两个相同的该操作，则如果他们同时从数据库中读取了A&#x3D;100，最终A会变成75（即少扣了25）</li>
+</ul>
+<p>最基础最笨拙的解决这些问题的方式就是让数据库将所有的事务排成一个队列依次执行，只有当前一个事务执行完毕、数据写会，再执行下一个事务，但是这样就会丧失数据库的并发性，还会占用大量的存储（因为我们需要把整个数据库文件进行复制）</p>
+<p>因此我们需要数据库支持并发控制，并且在此基础上要保证数据的正确性和公平性</p>
+<h1 id="Transaction"><a href="#Transaction" class="headerlink" title="Transaction"></a>Transaction</h1><p>在正式开始之前，需要明确一下事务的定义。从正式一点的定义上来说，数据库是由一组组固定的命名对象A、B、C组成的，而事务就是对这些对象的一系列处理（比如说读写、插入、删除）</p>
+<p>以Sql语言为例，事务的起点会显式地用BEGIN来表示，而结束一般由成功的提交（COMMIT）或者报错（ABORT），如果事务提交，数据库会保存事务所做的所有修改（或者引发报错）；而如果事务报错，那么所有修改都将不复存在，数据库会进行回滚操作</p>
+<h1 id="Correctness-Criteria：ACID"><a href="#Correctness-Criteria：ACID" class="headerlink" title="Correctness Criteria：ACID"></a>Correctness Criteria：ACID</h1><p>事务的正确性标准被称为ACID</p>
+<ul>
+<li>原子性（Atomicity）：事务是一个不可分割的工作单位，事务中的操作要么全部成功，要么全部失败</li>
+<li>一致性（Consistency）：事务必须使数据库从一个一致性状态变换到另外一个一致性状态</li>
+<li>隔离性（Isolation）：多个事务并发执行就像事务单独执行一样并不会相互影响</li>
+<li>持久性（Durability）：持久性是指一个事务一旦被提交，它对数据库中数据的改变就是永久性的，接下来即使数据库发生故障也不应该对其有任何影响</li>
+</ul>
+<h2 id="Atomicity"><a href="#Atomicity" class="headerlink" title="Atomicity"></a>Atomicity</h2><p>事务只有两种可能的输出：提交和报错，要么完成所有的修改，要么所有的修改都不执行</p>
+<p>那么该如何保证原子性：</p>
+<h3 id="Logging"><a href="#Logging" class="headerlink" title="Logging"></a>Logging</h3><p>日志技术几乎在所有的DBMS中都会被使用到，其中有UndoLog（回滚未提交的操作）和RedoLog（执行已经提交的操作）</p>
+<p>DBMS在日志中按照顺序记录了事务所作出的所有修改，然后Undo所有报错事务已经执行了的操作</p>
+<h3 id="Shadow-Paging"><a href="#Shadow-Paging" class="headerlink" title="Shadow Paging"></a>Shadow Paging</h3><p>在事务执行之前，DBMS首先复制相关的page，让事务修改其中的数据，当且仅当事务正确提交之后，这些page才会对外可见</p>
+<h2 id="Consistency"><a href="#Consistency" class="headerlink" title="Consistency"></a>Consistency</h2><p>如果 DBMS 在事务开始之前是 consistent，那么在事务执行完毕后也应当是 consistent</p>
+<p>比如对于一个银行所使用的数据库，至少钱的数值不能小于100，如果a有90块钱，他想转100给b，此时，事务提交之前符合数据库的规则，但是在提交之后就不符合了，那么此时事务就不能够提交，这就是所谓的一致性</p>
+<ul>
+<li><p>数据库一致性：数据库中的数据是对现实世界中的模拟，并且满足约束的规则</p>
+</li>
+<li><p>事务一致性：事务执行前后数据库均满足一致性</p>
+</li>
+</ul>
+<h2 id="Isolation"><a href="#Isolation" class="headerlink" title="Isolation"></a>Isolation</h2><p>用户提交事务，不同事务执行过程应当互相隔离，互不影响，每个事务都认为只有自己在执行</p>
+<h3 id="并发控制协议"><a href="#并发控制协议" class="headerlink" title="并发控制协议"></a>并发控制协议</h3><p>为了达到并发执行事务的目的，我们需要并发控制协议，包含两种锁</p>
+<ul>
+<li>乐观锁：假设事物之间的冲突是罕见的，当冲突发生之后再进行处理</li>
+<li>悲观锁：事务执行时获取需要的锁，这样不会导致冲突的发生</li>
+</ul>
+<h3 id="事务并发顺序的正确性"><a href="#事务并发顺序的正确性" class="headerlink" title="事务并发顺序的正确性"></a>事务并发顺序的正确性</h3><p>为了保证结果的正确性，并发执行的顺序必须等同于某种串行的顺序</p>
+<ul>
+<li><strong>Serial Schedule</strong>：不同事务之间没有重叠，串行执行</li>
+<li><strong>Equivalent Schedules</strong>：对于任意数据库起始状态，若两个调度分别执行所到达的数据库最终状态相同，则称这两个调度等价</li>
+<li><strong>Serializable Schedule</strong>：如果一个 schedule 与事务之间的某种 serial execution 的效果一致，则称该 schedule 为 serializable schedule</li>
+</ul>
+<h3 id="事务冲突"><a href="#事务冲突" class="headerlink" title="事务冲突"></a>事务冲突</h3><p>两个不同的事务指向了同一个对象，如果其中一个对对象有写操作，则会产生冲突</p>
+<ul>
+<li>读写冲突：事务先A读取某行数据、事务B后修改该行数据，和事务B先修改某行事务、事务A后读该行记录两种schedule。事务A读到的结果不同。这种冲突可能会导致Unrepeatable Read（不可重复读，两次读取的数据可能不一样）和Dirty Read（脏读，一个事务读取了另一个事务还没有提交的数据）</li>
+<li>写读冲突：读未提交（脏读）</li>
+<li>写写冲突：Lost Update（更新丢失，一个事务将另一个事务的未提交的数据覆盖）</li>
+</ul>
+<h3 id="冲突串行化"><a href="#冲突串行化" class="headerlink" title="冲突串行化"></a>冲突串行化</h3><p>冲突的串行化执行可以通过一定的转换为某种串行化的结果</p>
+<ul>
+<li>两个 schedules 在 transactions 中有相同的 actions，且每组 conflicting actions 按照相同顺序排列，则称它们为 conflict equivalent</li>
+<li>一个 schedule S 如果与某个 serial schedule 是 conflict equivalent，则称 S 是 conflict serializable</li>
+<li>如果通过交换不同 transactions 中连续的 non-conflicting operations 可以将 S 转化成 serial schedule，则称 S 是 conflict serializable</li>
+</ul>
 
     </div>
 
@@ -242,11 +278,11 @@
 
         
     <div class="post-nav">
-      <div class="post-nav-item"></div>
       <div class="post-nav-item">
-    <a href="/2023/06/09/%E8%85%90%E7%83%82/" rel="next" title="花">
-      花 <i class="fa fa-chevron-right"></i>
+    <a href="/2024/03/14/%E5%A6%82%E4%BD%95%E7%94%A8redis%E5%AE%9E%E7%8E%B0%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/" rel="prev" title="如何用Redis实现消息队列">
+      <i class="fa fa-chevron-left"></i> 如何用Redis实现消息队列
     </a></div>
+      <div class="post-nav-item"></div>
     </div>
       </footer>
     
@@ -310,7 +346,7 @@
 
       <!--noindex-->
       <div class="post-toc-wrap sidebar-panel">
-          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E5%88%9B%E5%BB%BACigaCase"><span class="nav-number">1.</span> <span class="nav-text">为什么创建CigaCase</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#CigaCase%E7%9A%84%E5%86%85%E5%AE%B9"><span class="nav-number">2.</span> <span class="nav-text">CigaCase的内容</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%BACigaCase%E5%90%8D%E5%AD%97%E7%9A%84%E7%94%B1%E6%9D%A5"><span class="nav-number">3.</span> <span class="nav-text">为CigaCase名字的由来</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#CigaCase%E7%9A%84%E6%9E%84%E6%88%90"><span class="nav-number">4.</span> <span class="nav-text">CigaCase的构成</span></a></li></ol></div>
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Lecture-15-Concurrency-Control-Theory"><span class="nav-number">1.</span> <span class="nav-text">Lecture 15: Concurrency Control Theory</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Transaction-Managment"><span class="nav-number">2.</span> <span class="nav-text">Transaction Managment</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Transaction"><span class="nav-number">3.</span> <span class="nav-text">Transaction</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Correctness-Criteria%EF%BC%9AACID"><span class="nav-number">4.</span> <span class="nav-text">Correctness Criteria：ACID</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Atomicity"><span class="nav-number">4.1.</span> <span class="nav-text">Atomicity</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Logging"><span class="nav-number">4.1.1.</span> <span class="nav-text">Logging</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Shadow-Paging"><span class="nav-number">4.1.2.</span> <span class="nav-text">Shadow Paging</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Consistency"><span class="nav-number">4.2.</span> <span class="nav-text">Consistency</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Isolation"><span class="nav-number">4.3.</span> <span class="nav-text">Isolation</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%B9%B6%E5%8F%91%E6%8E%A7%E5%88%B6%E5%8D%8F%E8%AE%AE"><span class="nav-number">4.3.1.</span> <span class="nav-text">并发控制协议</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BA%8B%E5%8A%A1%E5%B9%B6%E5%8F%91%E9%A1%BA%E5%BA%8F%E7%9A%84%E6%AD%A3%E7%A1%AE%E6%80%A7"><span class="nav-number">4.3.2.</span> <span class="nav-text">事务并发顺序的正确性</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BA%8B%E5%8A%A1%E5%86%B2%E7%AA%81"><span class="nav-number">4.3.3.</span> <span class="nav-text">事务冲突</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%86%B2%E7%AA%81%E4%B8%B2%E8%A1%8C%E5%8C%96"><span class="nav-number">4.3.4.</span> <span class="nav-text">冲突串行化</span></a></li></ol></li></ol></li></ol></div>
       </div>
       <!--/noindex-->
 

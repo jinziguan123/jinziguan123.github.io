@@ -159,6 +159,121 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2024/03/16/CMU15-445-2022Fall-Lecture-15/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/NiJiKa.GIF">
+      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
+      <meta itemprop="description" content="琐碎和思考的堆放处">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="CigaCase">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2024/03/16/CMU15-445-2022Fall-Lecture-15/" class="post-title-link" itemprop="url">CMU15-445-2022Fall-Lecture-15</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2024-03-16 19:50:06 / 修改时间：19:50:23" itemprop="dateCreated datePublished" datetime="2024-03-16T19:50:06+08:00">2024-03-16</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h1 id="Lecture-15-Concurrency-Control-Theory"><a href="#Lecture-15-Concurrency-Control-Theory" class="headerlink" title="Lecture 15: Concurrency Control Theory"></a>Lecture 15: Concurrency Control Theory</h1><p>主要介绍了并发控制的原理</p>
+<h1 id="Transaction-Managment"><a href="#Transaction-Managment" class="headerlink" title="Transaction Managment"></a>Transaction Managment</h1><p>首先是一些常见的数据库事务上会出现的并发问题：</p>
+<p>比如对于以下一系列操作：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Read(A)</span><br><span class="line">Check(A &gt; 25)</span><br><span class="line">Pay(25)</span><br><span class="line">A = A - 25</span><br><span class="line">Write(A)</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>如果执行到A &#x3D; A - 25的时候，突然发生了断电，那么很有可能银行就收不到钱（这个其实和恢复系统有关系）</li>
+<li>如果某个人同时执行了两个相同的该操作，则如果他们同时从数据库中读取了A&#x3D;100，最终A会变成75（即少扣了25）</li>
+</ul>
+<p>最基础最笨拙的解决这些问题的方式就是让数据库将所有的事务排成一个队列依次执行，只有当前一个事务执行完毕、数据写会，再执行下一个事务，但是这样就会丧失数据库的并发性，还会占用大量的存储（因为我们需要把整个数据库文件进行复制）</p>
+<p>因此我们需要数据库支持并发控制，并且在此基础上要保证数据的正确性和公平性</p>
+<h1 id="Transaction"><a href="#Transaction" class="headerlink" title="Transaction"></a>Transaction</h1><p>在正式开始之前，需要明确一下事务的定义。从正式一点的定义上来说，数据库是由一组组固定的命名对象A、B、C组成的，而事务就是对这些对象的一系列处理（比如说读写、插入、删除）</p>
+<p>以Sql语言为例，事务的起点会显式地用BEGIN来表示，而结束一般由成功的提交（COMMIT）或者报错（ABORT），如果事务提交，数据库会保存事务所做的所有修改（或者引发报错）；而如果事务报错，那么所有修改都将不复存在，数据库会进行回滚操作</p>
+<h1 id="Correctness-Criteria：ACID"><a href="#Correctness-Criteria：ACID" class="headerlink" title="Correctness Criteria：ACID"></a>Correctness Criteria：ACID</h1><p>事务的正确性标准被称为ACID</p>
+<ul>
+<li>原子性（Atomicity）：事务是一个不可分割的工作单位，事务中的操作要么全部成功，要么全部失败</li>
+<li>一致性（Consistency）：事务必须使数据库从一个一致性状态变换到另外一个一致性状态</li>
+<li>隔离性（Isolation）：多个事务并发执行就像事务单独执行一样并不会相互影响</li>
+<li>持久性（Durability）：持久性是指一个事务一旦被提交，它对数据库中数据的改变就是永久性的，接下来即使数据库发生故障也不应该对其有任何影响</li>
+</ul>
+<h2 id="Atomicity"><a href="#Atomicity" class="headerlink" title="Atomicity"></a>Atomicity</h2><p>事务只有两种可能的输出：提交和报错，要么完成所有的修改，要么所有的修改都不执行</p>
+<p>那么该如何保证原子性：</p>
+<h3 id="Logging"><a href="#Logging" class="headerlink" title="Logging"></a>Logging</h3><p>日志技术几乎在所有的DBMS中都会被使用到，其中有UndoLog（回滚未提交的操作）和RedoLog（执行已经提交的操作）</p>
+<p>DBMS在日志中按照顺序记录了事务所作出的所有修改，然后Undo所有报错事务已经执行了的操作</p>
+<h3 id="Shadow-Paging"><a href="#Shadow-Paging" class="headerlink" title="Shadow Paging"></a>Shadow Paging</h3><p>在事务执行之前，DBMS首先复制相关的page，让事务修改其中的数据，当且仅当事务正确提交之后，这些page才会对外可见</p>
+<h2 id="Consistency"><a href="#Consistency" class="headerlink" title="Consistency"></a>Consistency</h2><p>如果 DBMS 在事务开始之前是 consistent，那么在事务执行完毕后也应当是 consistent</p>
+<p>比如对于一个银行所使用的数据库，至少钱的数值不能小于100，如果a有90块钱，他想转100给b，此时，事务提交之前符合数据库的规则，但是在提交之后就不符合了，那么此时事务就不能够提交，这就是所谓的一致性</p>
+<ul>
+<li><p>数据库一致性：数据库中的数据是对现实世界中的模拟，并且满足约束的规则</p>
+</li>
+<li><p>事务一致性：事务执行前后数据库均满足一致性</p>
+</li>
+</ul>
+<h2 id="Isolation"><a href="#Isolation" class="headerlink" title="Isolation"></a>Isolation</h2><p>用户提交事务，不同事务执行过程应当互相隔离，互不影响，每个事务都认为只有自己在执行</p>
+<h3 id="并发控制协议"><a href="#并发控制协议" class="headerlink" title="并发控制协议"></a>并发控制协议</h3><p>为了达到并发执行事务的目的，我们需要并发控制协议，包含两种锁</p>
+<ul>
+<li>乐观锁：假设事物之间的冲突是罕见的，当冲突发生之后再进行处理</li>
+<li>悲观锁：事务执行时获取需要的锁，这样不会导致冲突的发生</li>
+</ul>
+<h3 id="事务并发顺序的正确性"><a href="#事务并发顺序的正确性" class="headerlink" title="事务并发顺序的正确性"></a>事务并发顺序的正确性</h3><p>为了保证结果的正确性，并发执行的顺序必须等同于某种串行的顺序</p>
+<ul>
+<li><strong>Serial Schedule</strong>：不同事务之间没有重叠，串行执行</li>
+<li><strong>Equivalent Schedules</strong>：对于任意数据库起始状态，若两个调度分别执行所到达的数据库最终状态相同，则称这两个调度等价</li>
+<li><strong>Serializable Schedule</strong>：如果一个 schedule 与事务之间的某种 serial execution 的效果一致，则称该 schedule 为 serializable schedule</li>
+</ul>
+<h3 id="事务冲突"><a href="#事务冲突" class="headerlink" title="事务冲突"></a>事务冲突</h3><p>两个不同的事务指向了同一个对象，如果其中一个对对象有写操作，则会产生冲突</p>
+<ul>
+<li>读写冲突：事务先A读取某行数据、事务B后修改该行数据，和事务B先修改某行事务、事务A后读该行记录两种schedule。事务A读到的结果不同。这种冲突可能会导致Unrepeatable Read（不可重复读，两次读取的数据可能不一样）和Dirty Read（脏读，一个事务读取了另一个事务还没有提交的数据）</li>
+<li>写读冲突：读未提交（脏读）</li>
+<li>写写冲突：Lost Update（更新丢失，一个事务将另一个事务的未提交的数据覆盖）</li>
+</ul>
+<h3 id="冲突串行化"><a href="#冲突串行化" class="headerlink" title="冲突串行化"></a>冲突串行化</h3><p>冲突的串行化执行可以通过一定的转换为某种串行化的结果</p>
+<ul>
+<li>两个 schedules 在 transactions 中有相同的 actions，且每组 conflicting actions 按照相同顺序排列，则称它们为 conflict equivalent</li>
+<li>一个 schedule S 如果与某个 serial schedule 是 conflict equivalent，则称 S 是 conflict serializable</li>
+<li>如果通过交换不同 transactions 中连续的 non-conflicting operations 可以将 S 转化成 serial schedule，则称 S 是 conflict serializable</li>
+</ul>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://example.com/2024/03/14/%E5%A6%82%E4%BD%95%E7%94%A8redis%E5%AE%9E%E7%8E%B0%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -1736,94 +1851,6 @@
   
   
 
-      
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2023/11/14/%E8%BF%BD%E6%82%BC/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/NiJiKa.GIF">
-      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
-      <meta itemprop="description" content="琐碎和思考的堆放处">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="CigaCase">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          
-            <a href="/2023/11/14/%E8%BF%BD%E6%82%BC/" class="post-title-link" itemprop="url">追悼</a>
-        </h2>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-calendar"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2023-11-14 21:53:07" itemprop="dateCreated datePublished" datetime="2023-11-14T21:53:07+08:00">2023-11-14</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="far fa-calendar-check"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2024-03-16 16:49:01" itemprop="dateModified" datetime="2024-03-16T16:49:01+08:00">2024-03-16</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-folder"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/%E7%A2%8E%E7%A2%8E%E5%BF%B5/" itemprop="url" rel="index"><span itemprop="name">碎碎念</span></a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>灵堂的大小比想象中更小，黑白色调的压迫感让人喘不过气，抽泣声比哀乐更抢先一步涌入耳蜗，枯萎的浅黄菊花是一片黑色孝布中唯一显眼的色彩<br>死者是娘家的某位亲戚，在生死线上挣扎了许久之后撒手人寰，他是家里的老幺，众兄弟姐妹没有想到亲生弟弟会由自己亲手送走<br>沉默、低语、泪水，身处如此环境之中，很难催生出悲伤以外的情绪</p>
-<p>自我出生以来，身边的绝大部分至亲，不说身体健康，顶多也只是小病不断大病没有的程度，所以说来惭愧，我深知自己的这种想法有些猎奇甚至十分冒犯，但我在追悼会开始之前的确是有些兴奋——这是我人生中第一次参加追悼会，第一次亲眼见到逝者</p>
-<p>仪式流程就和普通的追悼会一样：奏哀乐，念悼词，绕场一周告别遗体<br>受到众人情绪的感染，很难不鼻尖泛酸，眼眶微红，但也仅限于此。我并非铁石心肠，恰恰相反是一个很情绪化的人，只不过今天我尽量让自己仿佛置身事外，不参与其中<br>我也的确做的不错——逝者的仪容、盖住遗体的鲜花、棺材里他最喜欢戴的帽子、沉默的人、流泪的人、情绪激动的人、号啕大哭的人，我都一一看过，记在了这里</p>
-<p>终于到了最后的时刻，侍者慢慢合上棺材盖，渲染着悲伤氛围的分贝达到了顶峰</p>
-<blockquote>
-<p>“他还那么年轻……”——有人已经无法控制自己的声带<br>“让我再看他最后一眼”——有人歇斯底里抓着棺材板<br>“我们就送你到这里了……”——有人嘶哑着念叨着告别的言语</p>
-</blockquote>
-<p>逝者的儿子接过不知从哪里递过来的锤子和四个钉子<br>一下<br>一下<br>一下<br>一下<br>……<br>敲打铁钉的声音盖过人群的哽咽，抹消光线再一次照进棺材的机会，以及生者再次见到他的机会</p>
-<p>至此，结束</p>
-<p>尽管我一再憋住悲伤，努力当一个无情的摄像机，但我似乎高估了自己的心理防线<br>之前也提过，我是一个情绪化的人，这里又不得不再加一句：<br>我是一个很傲慢的人<br>我天真地以为，在网络上看过这么多的生离死别之后，自己多多少少会有所防备<br>所以不曾设想过，自己不切实际的傲慢在现实的冲击之下会有多么脆弱</p>
-<p>在钉棺材板的时候，我的情绪管理就已经小小地失控了，恐惧教唆着泪水逃出眼眶，前赴后继<br>在将来某个必将到来的时间，我也会拿起锤子，敲下钉子，亲手埋葬我最重视的人<br>我在害怕，害怕父母的死去，害怕重要之人的离开<br>那会是多久之后？二十年？十年？几个月？几周？还是明天？没有人能够保证<br>在那一天到来之前，我会变得足够坚强吗？坚强到能够坦然接受他们的离开，坚强到能够不在敲下钉子的时候因悲伤而脱力？<br>我会变得足够优秀吗？优秀到让他们不用担心自己的后事，优秀到能够不留遗憾地送别他们？<br>我要送别多少人，体验多少次今天体验过的恐惧，才能不再恐惧呢？<br>到时候我会没有出息地说出诸如“对不起，要是再多点时间就好了”之类的话吗？<br>我把死亡想得太过温柔，把离别想得太过轻松，以至于忽略了它们将伴随我的一生<br>在敲击声不断的督促下我终于明白：</p>
-<blockquote>
-<p>关于死亡，关于离别，我尚且什么都不明白，而在我什么都没有准备好的时候，丧钟已经悄悄响起</p>
-</blockquote>
-<p>快点长大吧，趁着一切为时未晚</p>
-
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
 
   
   <nav class="pagination">
@@ -1895,7 +1922,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">16</span>
+          <span class="site-state-item-count">17</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
