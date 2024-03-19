@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+  <link rel="stylesheet" href="/lib/pace/pace-theme-flash.min.css">
+  <script src="/lib/pace/pace.min.js"></script>
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"example.com","root":"/","scheme":"Muse","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="Lecture 16: Two-Phase Locking本章主要介绍了数据库事务处理中的2-PL协议 上节课介绍了如何使用WW、WR、RW三种冲突来判断事物之间是否是串行化的，但是在现实中，这种方法是不切实际的，因为我们不可能提前预知所有事物到底什么时候到达，以及事务具体要做什么，而在现实生活中，事务有可能会源源不断地发送到数据库，这就意味着数据库每时每刻都需要将新的事务纳入串行化的判断范畴 因">
+<meta property="og:type" content="article">
+<meta property="og:title" content="CMU15-445-2022Fall-Lecture-16">
+<meta property="og:url" content="http://example.com/2024/03/19/CMU15-445-2022Fall-Lecture-16/index.html">
+<meta property="og:site_name" content="CigaCase">
+<meta property="og:description" content="Lecture 16: Two-Phase Locking本章主要介绍了数据库事务处理中的2-PL协议 上节课介绍了如何使用WW、WR、RW三种冲突来判断事物之间是否是串行化的，但是在现实中，这种方法是不切实际的，因为我们不可能提前预知所有事物到底什么时候到达，以及事务具体要做什么，而在现实生活中，事务有可能会源源不断地发送到数据库，这就意味着数据库每时每刻都需要将新的事务纳入串行化的判断范畴 因">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2024-03-19T08:35:51.000Z">
+<meta property="article:modified_time" content="2024-03-19T08:36:31.155Z">
+<meta property="article:author" content="愚者大人的铁质卷烟盒">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://example.com/2024/03/19/CMU15-445-2022Fall-Lecture-16/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-CN'
+  };
+</script>
+
+  <title>CMU15-445-2022Fall-Lecture-16 | CigaCase</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">CigaCase</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2024/03/19/CMU15-445-2022Fall-Lecture-16/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/NiJiKa.GIF">
+      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
+      <meta itemprop="description" content="琐碎和思考的堆放处">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="CigaCase">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          CMU15-445-2022Fall-Lecture-16
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2024-03-19 16:35:51 / 修改时间：16:36:31" itemprop="dateCreated datePublished" datetime="2024-03-19T16:35:51+08:00">2024-03-19</time>
+            </span>
+
+          
+            <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv" style="display: none;">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-eye"></i>
+              </span>
+              <span class="post-meta-item-text">阅读次数：</span>
+              <span id="busuanzi_value_page_pv"></span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h1 id="Lecture-16-Two-Phase-Locking"><a href="#Lecture-16-Two-Phase-Locking" class="headerlink" title="Lecture 16: Two-Phase Locking"></a>Lecture 16: Two-Phase Locking</h1><p>本章主要介绍了数据库事务处理中的2-PL协议</p>
+<p>上节课介绍了如何使用WW、WR、RW三种冲突来判断事物之间是否是串行化的，但是在现实中，这种方法是不切实际的，因为我们不可能提前预知所有事物到底什么时候到达，以及事务具体要做什么，而在现实生活中，事务有可能会源源不断地发送到数据库，这就意味着数据库每时每刻都需要将新的事务纳入串行化的判断范畴</p>
+<p>因此需要一种协议来确保DBMS在不知道事务的具体内容、具体到达时间的情况下，依然能够作出正确的判断，2-PL协议就是一种通过合理地加锁来达到这种目的的协议</p>
+<h1 id="Lock-Type"><a href="#Lock-Type" class="headerlink" title="Lock Type"></a>Lock Type</h1><p>首先需要再一次强调一下数据库中两种类型锁的区别</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Locks</th>
+<th>Latches</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Separate</td>
+<td>User transactions</td>
+<td>Threads</td>
+</tr>
+<tr>
+<td>Protect</td>
+<td>Database Contents</td>
+<td>In-Memory Data Structures</td>
+</tr>
+<tr>
+<td>During</td>
+<td>Entire Transactions</td>
+<td>Critical Sections</td>
+</tr>
+<tr>
+<td>Modes</td>
+<td>Shared, Exclusive, Update, Intention</td>
+<td>Read, Write</td>
+</tr>
+<tr>
+<td>Handle deadlock by</td>
+<td>Detection &amp; Resolution Waits-for, Timeout, Aborts</td>
+<td>Avoidance Coding Discipline</td>
+</tr>
+<tr>
+<td>Kept in</td>
+<td>Lock Manager</td>
+<td>Protected Data Structure</td>
+</tr>
+</tbody></table>
+<p>本章关注的是Locks，其有两种基本类型：</p>
+<ul>
+<li>S-Lock：共享锁（读锁）</li>
+<li>X-Lock：互斥锁（写锁）</li>
+</ul>
+<p>两者的兼容矩阵如下所示：</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>S-LOCK (shared)</th>
+<th>X-LOCK (exclusive)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>S-LOCK (shared)</strong></td>
+<td>✅</td>
+<td>❌</td>
+</tr>
+<tr>
+<td><strong>X-LOCK (exclusive)</strong></td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+</tbody></table>
+<p>从上节课我们可以知道，WW、WR、RW都可能导致事务冲突，因此只有RR的时候，两把锁是可以兼容的</p>
+<p>DBMS有一个名为Lock Manager的模块，专门负责分配、回收事务的锁。每当事务申请加锁或者升级锁的时候，都需要向其发送请求，而Lock Manager内部还维护着一个Lock Table，记录每一个事务所持有的锁（在实验中以哈希表的形式呈现），Lock Manager会根据Lock Table上面的记录来判断是给该事务分配锁，还是拒绝请求，以此确保事务排列的正确性和并发性</p>
+<h1 id="Two-Phase-Locking"><a href="#Two-Phase-Locking" class="headerlink" title="Two-Phase Locking"></a>Two-Phase Locking</h1><p>2-PL帮助数据库在运行过程中决定某个事务是否可以访问某条数据，并且 2PL 的正常工作并不需要提前知道所有事务的执行内容，仅仅依靠已知的信息即可</p>
+<h2 id="Growing-amp-Shrinking"><a href="#Growing-amp-Shrinking" class="headerlink" title="Growing &amp; Shrinking"></a>Growing &amp; Shrinking</h2><p>这个协议定义了两个阶段：Growing 和 Shrinking</p>
+<ul>
+<li>在growing阶段，事务可以按需申请获取锁，Lock Manager可以决定分配与否</li>
+<li>在shrinking阶段，事务就只能够释放锁，而不能够获取新的锁或者升级已有的锁,<strong>也就是说，一旦事务释放了锁，那么它就再也无法获得锁了</strong></li>
+</ul>
+<p>这样的协议保证了事物之间<strong>一定不会出现有向环路，也就是一定是可串行化的</strong>（具体证明可以参考[这篇文章](<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/59535337">Transaction management：两阶段锁（two-phase locking） - 知乎 (zhihu.com)</a>)）</p>
+<h2 id="Cascading-Aborts"><a href="#Cascading-Aborts" class="headerlink" title="Cascading Aborts"></a>Cascading Aborts</h2><p>尽管2-PL能够确保事务之间的串行性，但其可能会引发一种新的问题：联级中止</p>
+<p>如果T1产生了Abort，那么已经读取了T1写入数据的T2就变成了脏读，这种情况下，DBMS需要将有过脏读的事务也反馈为Abort，而这些中止可能进而使得其它正在进行的事务级联地中止，这个过程就是所谓的级联中止</p>
+<h2 id="Strong-Strict-2-PL"><a href="#Strong-Strict-2-PL" class="headerlink" title="Strong Strict 2-PL"></a>Strong Strict 2-PL</h2><p>为了解决联级中止的问题，我们可以将2-PL进行改进，也被称为Rigorous 2-PL：</p>
+<ul>
+<li>growing阶段和2-PL相同</li>
+<li>shrinking阶段，每一个事务<strong>只有在自身结束之后才能够释放所有的锁</strong>，无论最终该事务是提交还是中止</li>
+</ul>
+<p>通过比较Non-2PL、2PL和Rigorous-2PL，可以看出，三者的并发程度越来越低，但是安全性是越来越高的（其中2PL和Rigourous-2PL的安全性是一致的，但是2PL可能会引发联级中止）</p>
+<h1 id="Deadlock-Detection-amp-Prevention"><a href="#Deadlock-Detection-amp-Prevention" class="headerlink" title="Deadlock Detection &amp; Prevention"></a>Deadlock Detection &amp; Prevention</h1><p>2PL协议无法解决死锁问题，和操作系统中常见的解决死锁问题的方法一样，可以从事后检测（Detection）和事前阻止（Prevention）来考虑</p>
+<h2 id="Deadlock-Detection"><a href="#Deadlock-Detection" class="headerlink" title="Deadlock Detection"></a>Deadlock Detection</h2><p>DBMS会维护一张waits-for graph，用来记录多个事务之间的相互等待关系，一旦图中出现了环，那么DBMS就需要考虑如何去打破这个环</p>
+<h3 id="Deadlock-Handling"><a href="#Deadlock-Handling" class="headerlink" title="Deadlock Handling"></a>Deadlock Handling</h3><p>当 DBMS 检测到死锁时，它会选择一个 “受害者” (事务)，将该事务回滚，打破环形依赖，而这个 “受害者” 将依靠配置或者应用层逻辑重试或中止。这里有两个设计决定：</p>
+<ol>
+<li>检测死锁的频率</li>
+<li>如何选择合适的 “受害者”</li>
+</ol>
+<p>检测死锁的频率越高，陷入死锁的事务等待的时间越短，但消耗的 cpu 也就越多。所以这是个典型的 trade-off，通常有一个调优的参数供用户配置</p>
+<p>选择 “受害者” 的指标可能有很多：事务持续时间、事务的进度、事务锁住的数据数量、级联事务的数量、事务曾经重启的次数等等。在选择完 “受害者” 后，DBMS 还有一个设计决定需要做：完全回滚还是回滚到足够消除环形依赖即可</p>
+<h2 id="Deadlock-Prevention"><a href="#Deadlock-Prevention" class="headerlink" title="Deadlock Prevention"></a>Deadlock Prevention</h2><p>Deadlock prevention 是一种事前行为，采用这种方案的 DBMS 无需维护 waits-for graph，也不需要实现 detection 算法，而是在事务尝试获取其它事务持有的锁时直接决定是否需要将其中一个事务中止。</p>
+<p>通常 prevention 会按照事务的年龄来赋予优先级，事务的时间戳越老，优先级越高。有两种 prevention 的策略： </p>
+<ul>
+<li>Old Waits for Young：如果 requesting txn 优先级比 holding txn 更高则等待后者释放锁；更低则自行中止</li>
+<li>Young Waits for Old：如果 requesting txn 优先级比 holding txn 更高则后者自行中止释放锁，让前者获取锁，否则 requesting txn 等待 holding txn 释放锁</li>
+</ul>
+<p>无论是 Old Waits for Young 还是 Young Waits for Old，只要保证 prevention 的方向是一致的，就能阻止死锁发生，其原理类似哲学家就餐设定顺序的解决方案：先给哲学家排个序，遇到获取刀叉冲突时，顺序高的优先</p>
+<h1 id="Lock-Granularity"><a href="#Lock-Granularity" class="headerlink" title="Lock Granularity"></a>Lock Granularity</h1><p>当事务在获取锁的时候，DBMS可以决定分配给它的锁的粒度（到底是给它锁住一整张表？还是一个tuple？还是一个page？），DBMS需要尽可能给事务分配最少的锁，并且在并行性和开销之间进行权衡（更少，但粒度更大的锁 vs. 更多，但粒度更细的锁）</p>
+<h2 id="Intention-Locks"><a href="#Intention-Locks" class="headerlink" title="Intention Locks"></a>Intention Locks</h2><h3 id="Definition"><a href="#Definition" class="headerlink" title="Definition"></a>Definition</h3><p>意向锁是一种表级别的锁，用于表明事务将要对某个对象（表、页、行）加锁。它被用来表示一个事务在获取该对象的锁之前是否会先获取其他类型的锁</p>
+<blockquote>
+<p>来自百度百科的定义：</p>
+<p>如果另一个任务试图在该表级别上应用共享或排它锁，则受到由第一个任务控制的表级别意向锁的阻塞。第二个任务在锁定该表前不必检查各个页或行锁，而只需检查表上的意向锁</p>
+</blockquote>
+<h3 id="Why"><a href="#Why" class="headerlink" title="Why"></a>Why</h3><p>那么为什么我们需要意向锁呢？举个例子：现在有事务A已经获取了表t的某一行的互斥锁，而此时表B想要获取这张表的表共享锁，由于两把锁互斥，所以B在试图对表t施加锁的时候必须保证：</p>
+<ul>
+<li>当前没有其他事务持有 users 表的排他锁</li>
+<li>当前没有其他事务持有 users 表中任意一行的排他锁</li>
+</ul>
+<p>而为了确保第二个条件成立，B就需要检查表t的每一行进行判断。很明显效率非常低，而有了意向锁之后，情况就不一样了，我们只需要检查这张表的IS或者IX锁是否空闲，那么就能直接判断能够进行后续的加锁操作，类比来说，意向锁就是这张表所有锁的哨兵</p>
+<h3 id="Lock-Types"><a href="#Lock-Types" class="headerlink" title="Lock Types"></a>Lock Types</h3><ul>
+<li><p>Intention-Shared Lock</p>
+<p>如果我们只需要读取表R的某些行，我们可以在这些行上加上S锁。对于整个表R, 表的任何行都可以被读取。这种情况下，可以给表R加上IS锁。从而，如果此时有另一个事务需要读取表R的某些行或是整个表R, 就能根据R上的IS锁直接做出判断，无需遍历表的每一行</p>
+</li>
+<li><p>Intention-Exclusive Lock</p>
+<p>如果我们需要写表R的某些行，此时可以给表R加上IX锁以表达这个意思。例如，表R加上IX锁后，就不能申请R上的S锁，因为IX锁表明某个事务正在修改表R的某些行</p>
+</li>
+<li><p>Shared+Intention-Exclusive Lock</p>
+<p>共享意向排它锁，是S锁和IX锁的结合，适用于以下场景：如果需要修改表中的某些行，但需要读取整个表，这时候就可以给整张表加上SIX锁。可以看到它与IX锁的区别：加入SIX锁后，不能修改表的其它行，因为需要读整张表。</p>
+<p>在MySQL中，并没有SIX锁；但在Oracle、SQL Server中有这种锁，此类数据库有更为复杂的树状组织</p>
+</li>
+</ul>
+<h3 id="Compatibility-Matrix"><a href="#Compatibility-Matrix" class="headerlink" title="Compatibility Matrix"></a>Compatibility Matrix</h3><p>这里给出意向锁、读写锁之间的兼容矩阵，竖为事务T1已经持有的锁，横为T2想要申请的锁：</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>IS</th>
+<th>IX</th>
+<th>S</th>
+<th>SIX</th>
+<th>X</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>IS</strong></td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+</tr>
+<tr>
+<td><strong>IX</strong></td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+<tr>
+<td><strong>S</strong></td>
+<td>✅</td>
+<td>❌</td>
+<td>✅</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+<tr>
+<td><strong>SIX</strong></td>
+<td>✅</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+<tr>
+<td><strong>X</strong></td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+</tbody></table>
+<h2 id="Locking-Protocol"><a href="#Locking-Protocol" class="headerlink" title="Locking Protocol"></a>Locking Protocol</h2><p>对于一个事务，其需要在数据库层次结构的最高一级获取合适的锁：</p>
+<ul>
+<li>如果想要获取一个结点的S或者IS锁，事务必须至少获取其双亲结点的IS锁</li>
+<li>如果想要获取一个结点的X、IX或者SIX锁，则必须至少获取其双亲结点的IX锁</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2024/03/16/CMU15-445-2022Fall-Lecture-15/" rel="prev" title="CMU15-445-2022Fall-Lecture-15">
+      <i class="fa fa-chevron-left"></i> CMU15-445-2022Fall-Lecture-15
+    </a></div>
+      <div class="post-nav-item"></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+    
+  <div class="comments">
+    <div id="lv-container" data-id="city" data-uid="MTAyMC81ODU4MS8zNTA0Mw=="></div>
+  </div>
+  
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Lecture-16-Two-Phase-Locking"><span class="nav-number">1.</span> <span class="nav-text">Lecture 16: Two-Phase Locking</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Lock-Type"><span class="nav-number">2.</span> <span class="nav-text">Lock Type</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Two-Phase-Locking"><span class="nav-number">3.</span> <span class="nav-text">Two-Phase Locking</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Growing-amp-Shrinking"><span class="nav-number">3.1.</span> <span class="nav-text">Growing &amp; Shrinking</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Cascading-Aborts"><span class="nav-number">3.2.</span> <span class="nav-text">Cascading Aborts</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Strong-Strict-2-PL"><span class="nav-number">3.3.</span> <span class="nav-text">Strong Strict 2-PL</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Deadlock-Detection-amp-Prevention"><span class="nav-number">4.</span> <span class="nav-text">Deadlock Detection &amp; Prevention</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Deadlock-Detection"><span class="nav-number">4.1.</span> <span class="nav-text">Deadlock Detection</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Deadlock-Handling"><span class="nav-number">4.1.1.</span> <span class="nav-text">Deadlock Handling</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Deadlock-Prevention"><span class="nav-number">4.2.</span> <span class="nav-text">Deadlock Prevention</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Lock-Granularity"><span class="nav-number">5.</span> <span class="nav-text">Lock Granularity</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Intention-Locks"><span class="nav-number">5.1.</span> <span class="nav-text">Intention Locks</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Definition"><span class="nav-number">5.1.1.</span> <span class="nav-text">Definition</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Why"><span class="nav-number">5.1.2.</span> <span class="nav-text">Why</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Lock-Types"><span class="nav-number">5.1.3.</span> <span class="nav-text">Lock Types</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Compatibility-Matrix"><span class="nav-number">5.1.4.</span> <span class="nav-text">Compatibility Matrix</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Locking-Protocol"><span class="nav-number">5.2.</span> <span class="nav-text">Locking Protocol</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="愚者大人的铁质卷烟盒"
+      src="/images/NiJiKa.GIF">
+  <p class="site-author-name" itemprop="name">愚者大人的铁质卷烟盒</p>
+  <div class="site-description" itemprop="description">琐碎和思考的堆放处</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">18</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">4</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/jinziguan123" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;jinziguan123" rel="noopener" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:18917950960@163.com" title="E-Mail → mailto:18917950960@163.com" rel="noopener" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2024</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">愚者大人的铁质卷烟盒</span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://muse.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Muse</a> 强力驱动
+  </div>
+
+
+    <script async src="//dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+    <span id="busuanzi_container_site_pv">总访问量<span id="busuanzi_value_site_pv"></span>次</span>
+    <span class="post-meta-divider">|</span>
+    <span id="busuanzi_container_site_uv">总访客数<span id="busuanzi_value_site_uv"></span>人</span>
+    <span class="post-meta-divider">|</span>
+<!-- 不蒜子计数初始值纠正 -->
+<script>
+$(document).ready(function() {
+
+    var int = setInterval(fixCount, 50);  // 50ms周期检测函数
+    var countOffset = 20000;  // 初始化首次数据
+
+    function fixCount() {            
+       if (document.getElementById("busuanzi_container_site_pv").style.display != "none")
+        {
+            $("#busuanzi_value_site_pv").html(parseInt($("#busuanzi_value_site_pv").html()) + countOffset); 
+            clearInterval(int);
+        }                  
+        if ($("#busuanzi_container_site_pv").css("display") != "none")
+        {
+            $("#busuanzi_value_site_uv").html(parseInt($("#busuanzi_value_site_uv").html()) + countOffset); // 加上初始数据 
+            clearInterval(int); // 停止检测
+        }  
+    }
+       	
+});
+</script> 
+
+
+        
+<div class="busuanzi-count">
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+    <span class="post-meta-item" id="busuanzi_container_site_uv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+<script>
+NexT.utils.loadComments(document.querySelector('#lv-container'), () => {
+  window.livereOptions = {
+    refer: location.pathname.replace(CONFIG.root, '').replace('index.html', '')
+  };
+  (function(d, s) {
+    var j, e = d.getElementsByTagName(s)[0];
+    if (typeof LivereTower === 'function') { return; }
+    j = d.createElement(s);
+    j.src = 'https://cdn-city.livere.com/js/embed.dist.js';
+    j.async = true;
+    e.parentNode.insertBefore(j, e);
+  })(document, 'script');
+});
+</script>
+
+</body>
+</html>
