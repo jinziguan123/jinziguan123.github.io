@@ -159,6 +159,154 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-9/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/NiJiKa.GIF">
+      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
+      <meta itemprop="description" content="琐碎和思考的堆放处">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="CigaCase">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2024/02/28/CMU15-445-2022Fall-Lecture-9/" class="post-title-link" itemprop="url">CMU15-445 2022Fall Lecture 9</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2024-02-28 12:48:06 / 修改时间：13:00:12" itemprop="dateCreated datePublished" datetime="2024-02-28T12:48:06+08:00">2024-02-28</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E7%AC%94%E8%AE%B0/" itemprop="url" rel="index"><span itemprop="name">笔记</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h1 id="Lecture-9-Index-Concurrency-Control"><a href="#Lecture-9-Index-Concurrency-Control" class="headerlink" title="Lecture 9: Index Concurrency Control"></a>Lecture 9: Index Concurrency Control</h1><p>本章主要介绍了数据库中几种闩锁的概念和简单的实现（非代码）</p>
+<h1 id="Locks-vs-Latches"><a href="#Locks-vs-Latches" class="headerlink" title="Locks vs. Latches"></a>Locks vs. Latches</h1><ul>
+<li>lock<ol>
+<li>保护当前事务的索引内容不会受到其他事务的影响</li>
+<li>lock在整个事务的执行期间都会被持有</li>
+<li>DBMS需要在发生冲突的时候回滚变更</li>
+</ol>
+</li>
+<li>latch<ol>
+<li>保护索引内部数据不会被其他线程影响</li>
+<li>仅在线程对索引进行某个操作的时刻被持有（一般持有时间很短）</li>
+<li>DBMS不需要对数据的更新进行回滚</li>
+<li>latch有两种mode，分别为Read Mode和Write Mode，其中Read Mode可以同时被多个线程持有，但Write Mode不行</li>
+</ol>
+</li>
+</ul>
+<h1 id="Latch-Implementation"><a href="#Latch-Implementation" class="headerlink" title="Latch Implementation"></a>Latch Implementation</h1><h2 id="Blocking-OS-Mutex"><a href="#Blocking-OS-Mutex" class="headerlink" title="Blocking OS Mutex"></a>Blocking OS Mutex</h2><ul>
+<li>依赖OS内置的互斥机制，由<strong>用户空间的自旋latch</strong>以及<strong>OS的互斥锁</strong>组成。当DBMS无法获得用户空间的latch时，会试图进入内核态并获取更加昂贵的mutex，如果还是无法获取，则会被阻塞</li>
+<li>OS mutex在DBMS中不是一个好的选择，因为会被OS介入，而且开销比较大<ul>
+<li>例子：std::mutex  </li>
+<li>优点：使用简单</li>
+<li>缺点：消耗大，不可扩展</li>
+</ul>
+</li>
+</ul>
+<h2 id="Test-and-Set-Spin-Latch-TAS"><a href="#Test-and-Set-Spin-Latch-TAS" class="headerlink" title="Test-and-Set Spin Latch(TAS)"></a>Test-and-Set Spin Latch(TAS)</h2><ul>
+<li>自旋锁比mutex更有效，因为DBMS可以控制自旋锁在无法获取latch的情况下的下一步动作：比如可以继续尝试获取或者允许OS取消调度<ul>
+<li>例子：std::atomic&lt;T&gt;</li>
+<li>优点：上锁更高效，一个<code>std::atomic_flag latch</code>指令即可上锁</li>
+<li>缺点：没有扩展性，对于cache和OS并不友好</li>
+</ul>
+</li>
+</ul>
+<h2 id="Reader-Writer-Latches"><a href="#Reader-Writer-Latches" class="headerlink" title="Reader-Writer Latches"></a>Reader-Writer Latches</h2><ul>
+<li>mutex和自旋锁并不区分读写（对于数据库而言是不好的），DBMS需要一种可以支持并发读取的方法，这样如果程序有大量读取的需求就可以获得更好的效果</li>
+<li>读写锁允许latch以read或者write的mode进行等待，可以跟踪有多少线程持有该latch，以及有多少线程在等待获取latch。对于read锁，我们可以定义其在任何情况下都可以获得这把latch，也可以指定其只有在等待write的线程为空的时候才能获取；对于write锁，则需要等待read锁被全部释放<ul>
+<li>例子：std::shared_mutex</li>
+<li>优点：能够并发读取</li>
+<li>缺点：必须要额外维护两个队列：read线程和write线程以防止饥饿现象，内存开销会更大</li>
+</ul>
+</li>
+</ul>
+<h1 id="Hash-Table-Latching"><a href="#Hash-Table-Latching" class="headerlink" title="Hash Table Latching"></a>Hash Table Latching</h1><ul>
+<li>由于Hash数据结构本身的特性，所有线程在访问的时候都是按照顺序自上而下的，每次也都只会访问一个slot，因此不会出现死锁现象</li>
+<li>按照粒度的大小，Hash Table Latching可以被分成两种：<ul>
+<li>Page Latches：每个Page都用一把大锁锁住，每个线程在访问Page之前获取一个Read或者Write锁，这样的做法会降低程序的并发性，但是由于线程访问每个slot的速度很快，因为只需要一把锁即可实现</li>
+<li>Slot Latches：Page中的每个slot都有自己的锁，所以读写线程可以同时访问一个Page的不同slot，提高了并发度，但同时也增加了存储和计算开销</li>
+</ul>
+</li>
+</ul>
+<h1 id="B-Tree-Latching"><a href="#B-Tree-Latching" class="headerlink" title="B+ Tree Latching"></a>B+ Tree Latching</h1><ul>
+<li>B+树的锁主要为了防止以下问题：<ul>
+<li>不同线程同时修改同一个结点</li>
+<li>当一个线程对结点进行插入&#x2F;删除，导致结点出现了split&#x2F;merge现象时，另一个线程正在遍历树</li>
+</ul>
+</li>
+<li>Latch Crabbing&#x2F;Couping Protocol（锁存耦合协议）允许多个线程并发访问B+树，具体规则如下：<ul>
+<li>获取父节点锁</li>
+<li>获取子结点锁</li>
+<li>如果子结点被认为是安全的（不会发生split、merge、再分配），则释放父节点的锁</li>
+</ul>
+</li>
+<li>Basic Latch Crabbing Protocol<ul>
+<li>Search：从根结点开始向下，获取子结点锁-&gt;释放父节点锁，重复此步骤</li>
+<li>Insert&#x2F;Delete：从根结点向下按需获取x个结点的latch，一旦孩子结点被锁住了，检查是否安全，如果安全，则释放所有祖先的锁</li>
+<li>释放锁的顺序在逻辑上不重要，然而在现实中越靠近根结点的锁需要更先释放，否则会造成性能的下降</li>
+</ul>
+</li>
+<li>Better Latch Crabbing Protocol：<ul>
+<li>在改进的算法中，每一个线程都会默认到达目标结点的路径是安全的，并且以不断抓去Read锁的形式来到达，最终检验是否安全。如果不安全，则停止操作，重新开始，只不过重新遍历会抓去Write锁</li>
+<li>Search：与朴素的算法一致</li>
+<li><strong>Insert&#x2F;Delete</strong>：跟Search一样，不断获取和释放READ latch。最后在叶子结点上设置WRITE latch。如果叶子不安全，则重来，这次用基本算法的思路</li>
+</ul>
+</li>
+<li>Leaf Node Scan<ul>
+<li>前两种算法都是自上而下的，线程无法获取更上一层的锁存器，因此不会出现死锁现象</li>
+<li>然而扫描叶子结点的时候很容易出现死锁，当两个线程以相反的方向遍历到了相邻的叶子结点，就会出现死锁，而Index Latch本身并不支持死锁的检测和预防</li>
+<li>因为，唯一能够解决这个问题的方式就是通过code discipline，叶子结点的兄弟结点的锁存器必须遵循“no wait”原则。B+树必须面对锁存器获取失败的情况，一般会选择终止操作，重新启动</li>
+</ul>
+</li>
+</ul>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-6/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -995,89 +1143,10 @@
   
   
 
-      
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2023/06/06/%E5%BC%80%E5%BC%A0%E5%A4%A7%E5%90%89/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/NiJiKa.GIF">
-      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
-      <meta itemprop="description" content="琐碎和思考的堆放处">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="CigaCase">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          
-            <a href="/2023/06/06/%E5%BC%80%E5%BC%A0%E5%A4%A7%E5%90%89/" class="post-title-link" itemprop="url">开张大吉</a>
-        </h2>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-calendar"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2023-06-06 21:09:18" itemprop="dateCreated datePublished" datetime="2023-06-06T21:09:18+08:00">2023-06-06</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="far fa-calendar-check"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2024-03-16 16:48:28" itemprop="dateModified" datetime="2024-03-16T16:48:28+08:00">2024-03-16</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-folder"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/%E7%A2%8E%E7%A2%8E%E5%BF%B5/" itemprop="url" rel="index"><span itemprop="name">碎碎念</span></a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>花了将近一整天时间来倒腾git，总算把自己专属的Blog做出来了，拍手拍手<br>作为这个网站的第一条（如果不算经典hello world的话），主要来说一说关于这个网站的一些想法</p>
-<h2 id="为什么创建CigaCase"><a href="#为什么创建CigaCase" class="headerlink" title="为什么创建CigaCase"></a>为什么创建CigaCase</h2><p>主要原因是作者经过考试周的高强度鞭笞之后感到一阵空虚（划掉）<br>这段时间我一直处在焦虑之中：我为什么要学计算机？我都学到了什么？我该怎么证明自己的价值……这些问题有些是杞人忧天自作多情，有些确确实实是我迟早需要面对需要思考的问题<br>我总想着，自己活了快20年了，其实并没有什么“想做的事情”，理所当然也就实质上没有“做成哪些事情”，那么我究竟给这个世界留下了什么痕迹呢？<br>我总想着要做些什么来证明自己的能力，却又因为缺乏能力和想象力而束手束脚<br>而在某一天，我逛github的时候发现了某位大佬做的动态二维码转换器，我就觉得：真好啊，真酷啊，我能不能把这个东西运用在自己的生活中呢？于是我突然发觉，自己想学计算机，正是想要避免浪费时间精力在自己不喜欢的事情上，转而将其投入我觉得真的很cooooool的东西上(此外受到了某不知名庞姓大佬的启发)<br>所以我下定决心，一定要搞一个自己的博客，因为这真的很🆒<br>就这样，CigaCase诞生了</p>
-<h2 id="CigaCase的内容"><a href="#CigaCase的内容" class="headerlink" title="CigaCase的内容"></a>CigaCase的内容</h2><p>我对CigaCase的定位是“琐碎和思考的堆放处”，根据几乎可以概括我生活中所有遇得到的事件了（笑）<br>目前的预期是放一些自己平日里的矫情的感慨、列表里受众群体较少的碎碎念、对于争议性话题的看法、学习记录（没错我甚至想要做学习记录的tag，但这个东西大概率会鸽掉）<br>了解我的人都知道我平日里在朋友圈屁话特别多，如果把这些比较正式的东西丢进去，有些格格不入的感觉<br>我想我的思想值得被聚集在一个更加有深度的地方，这就是CigaCase<br>后续可能会加入其他的板块（比如跑团模组的想法之类的）</p>
-<h2 id="为CigaCase名字的由来"><a href="#为CigaCase名字的由来" class="headerlink" title="为CigaCase名字的由来"></a>为CigaCase名字的由来</h2><p>卷烟盒，来自我很喜欢的一本叫《诡秘之主》的网文小说中，主角的随身物品，出场率极高，存在感极强（强烈推荐，虽然文学性比不上正统的小说，但是观感是迄今为止我看的书里面数一数二的）<br>我的网名几乎都用的是：愚者大人的铁质卷烟盒、愚者的铁质卷烟盒、卷卷卷烟盒，也是受这本书的影响<br>其实一开始想用“铁质卷烟盒”的，但是这样的话名字就太长了，没有逼格<br>卷烟盒的英文应该是cigarette case的，但是一样太长了，最终还是选取了ciga和case，不拗口，写出来也蛮好看的<br>在创建博客想域名的时候我就在想，既要体现出自己的特色，又要符合这个网站的设立初衷，那么“卷烟盒”貌似是一个不错的意向——普通而古典的小盒子，打开之后别有洞天（我还挺喜欢这种感觉的）</p>
-<h2 id="CigaCase的构成"><a href="#CigaCase的构成" class="headerlink" title="CigaCase的构成"></a>CigaCase的构成</h2><p>由于现在水平不够，所以基本上是按照网上教程来做的，本质上是个没什么技术含量的东西，但是用到了git相关的东西，我觉得还是有必要学一学用一用的。依稀记得MIT有一门叫做missing-semester的课，讲的都是些国内教学大纲用不到但是实际应用非常有价值的工具和知识点；这门课我看了一半，有时间得补一补，扯远了。<br>框架用的是Hexo，足够简洁，足够高效，一键部署，还有比Hexo更适合初学者的吗？<br>至于其他例如评论之类的功能，暂时还没添加进去的想法，以后可能会有，谁知道呢<br>不过Hexo生成的是静态网页，每次更新页面都要重新生成整个网站，一旦规模变大，就会比较臃肿。以后是否考虑换框架、是否考虑改成动态网页，这都要根据我自身的知识范畴和时间来安排<br>当然了，这种问题目前不在我的担心list上，毕竟小网站很难做大的啦～</p>
-<p>那么开张的感言到此为止，感谢你能看完以上这些碎碎念，我们日后相见（鞠躬🙇）</p>
-
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
 
   
   <nav class="pagination">
-    <a class="extend prev" rel="prev" href="/"><i class="fa fa-angle-left" aria-label="上一页"></i></a><a class="page-number" href="/">1</a><span class="page-number current">2</span>
+    <a class="extend prev" rel="prev" href="/"><i class="fa fa-angle-left" aria-label="上一页"></i></a><a class="page-number" href="/">1</a><span class="page-number current">2</span><a class="page-number" href="/page/3/">3</a><a class="extend next" rel="next" href="/page/3/"><i class="fa fa-angle-right" aria-label="下一页"></i></a>
   </nav>
 
 
@@ -1145,7 +1214,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">20</span>
+          <span class="site-state-item-count">21</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
