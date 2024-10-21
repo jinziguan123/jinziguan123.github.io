@@ -159,6 +159,229 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-12-13/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/NiJiKa.GIF">
+      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
+      <meta itemprop="description" content="琐碎和思考的堆放处">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="CigaCase">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2024/02/28/CMU15-445-2022Fall-Lecture-12-13/" class="post-title-link" itemprop="url">CMU15-445 2022Fall Lecture 12.13</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2024-02-28 12:49:20 / 修改时间：13:00:25" itemprop="dateCreated datePublished" datetime="2024-02-28T12:49:20+08:00">2024-02-28</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E7%AC%94%E8%AE%B0/" itemprop="url" rel="index"><span itemprop="name">笔记</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h1 id="Lecture-12-13-Query-Execution"><a href="#Lecture-12-13-Query-Execution" class="headerlink" title="Lecture 12,13: Query Execution"></a>Lecture 12,13: Query Execution</h1><p>主要讲了SQL语句查询执行的相关问题</p>
+<h1 id="Processing-Model"><a href="#Processing-Model" class="headerlink" title="Processing Model"></a>Processing Model</h1><p>首先是处理模型，定义了数据库中执行查询计划的三种模式，分别是：</p>
+<ul>
+<li>Iterator Model</li>
+<li>Materialization Model</li>
+<li>vectorization Model</li>
+</ul>
+<h2 id="Iterator-Model"><a href="#Iterator-Model" class="headerlink" title="Iterator Model"></a>Iterator Model</h2><p>又被称为Volcano Model或者Pipeline Model</p>
+<ul>
+<li><p>Iterator Model一共有三种基本的接口：Next()、Open()、Close()</p>
+</li>
+<li><p>该计算将关系代数中的每一种操作都抽象为一个operator，将整个SQL语句构造成一个operator树，这样一来，在进行查询的时候会从树顶向下不断调用next函数，而数据则会被自底向上拉取</p>
+</li>
+<li><p>迭代模型的优点：</p>
+<ul>
+<li>简单，每个operator可以单独实现逻辑，达到模块化处理，因此市面上有很多数据库都使用了迭代模型比如：SQLite、MongoDB、Impala、DB2、SQLServer、Greenplum、PostgreSQL、Oracle、MySQL</li>
+</ul>
+</li>
+<li><p>迭代模型的缺点：</p>
+<ul>
+<li>查询树调用的Next接口次数太多，而且每次调用都指返回一条数据，使得CPU执行效率很低</li>
+<li>Join、Subqueries、Order by等操作经常会阻塞</li>
+</ul>
+</li>
+</ul>
+<h2 id="Materialization-Model"><a href="#Materialization-Model" class="headerlink" title="Materialization Model"></a>Materialization Model</h2><p>物化模型优化了迭代模型的缺点：对于每一个operator，一次性处理所有的输入，处理完之后将所有结果一次性输出</p>
+<p>伪代码看上去和火山模型大差不差，区别只在于每一个operator都会将结果放到一个out列表中，最后进行输出</p>
+<ul>
+<li>物化模型对于OLTP负载更加友好，因为每一个查询所涉及到的数据范围都是较小的，并且调用的函数更少</li>
+<li>因此从另一方面来说，物化模型不适用于OLAP负载（因为OLAP涉及到的中间数据太多）</li>
+</ul>
+<h2 id="Vectorization-Model"><a href="#Vectorization-Model" class="headerlink" title="Vectorization Model"></a>Vectorization Model</h2><p>向量化模型与火山模型类似，对于每一种operator都要实现一种Next()函数，区别在于，向量化模型返回的是一批tuple，而不是火山模型中的一个tuple，可以简单理解成火山模型与物化模型两者的结合</p>
+<p>该模型适用于OLAP数据库，使得中间的结果不需要溢出到磁盘，同时也能够减少Next函数的调用次数</p>
+<h1 id="Access-Methods"><a href="#Access-Methods" class="headerlink" title="Access Methods"></a>Access Methods</h1><p>在执行查找的时候，DBMS需要一定的手段去访问叶子结点处的数据</p>
+<p>一共可以分为三种方法</p>
+<h2 id="Sequential-Scan"><a href="#Sequential-Scan" class="headerlink" title="Sequential Scan"></a>Sequential Scan</h2><p>最容易想到的就是顺序扫描：对于表中的每一个page，DBMS都从缓冲池中对其进行检索，并在此基础上遍历每一个tuple来决定是否要将其作为数据进行返回</p>
+<ul>
+<li>DBMS会保存一个游标（cursor），用来标记其上次访问的page&#x2F;slot</li>
+</ul>
+<h3 id="Sequential-Scan-Optimization"><a href="#Sequential-Scan-Optimization" class="headerlink" title="Sequential Scan : Optimization"></a>Sequential Scan : Optimization</h3><p>尽管顺序扫描是一种比较笨拙的方法，但可能也是我们唯一的选择</p>
+<p>然而顺序扫描是可以进行优化的，我们在之前的课中已经接触过一些了，比如：</p>
+<ul>
+<li>Pre-Fetching（Lecture 6）</li>
+<li>Buffer Pool Bypass（Lecture 6）</li>
+<li>Parallelization（Lecture 13）</li>
+<li>Heap Clustering（Lecture 8）</li>
+<li>Late Materialization（Lecture 11）</li>
+</ul>
+<p>这节课讲了一个新的方法，Data Skipping</p>
+<h4 id="Data-Skipping"><a href="#Data-Skipping" class="headerlink" title="Data Skipping"></a>Data Skipping</h4><p>有两种方法可以实现数据跳过组件：</p>
+<ol>
+<li><p>Approximate Queries（Lossy）</p>
+<p>近似查询会首先对整张表做一个抽样，形成一个表的子集，对这个子集执行查询，这样能够得到一个近似的结果</p>
+<p>近似查询是易失性的，这里的易失性应该是指会丢失一些本来应到能够找到的数据</p>
+</li>
+<li><p>Zone Map（Lossless）</p>
+<p>这里重点介绍的方法就是Zone Map法，简单来说就是对于查询涉及到的每一个page，都实现处理出一些聚合属性，比如这个page上的MAX、MIN、AVG、SUM、COUNT，这样在查询到来的时候就能够直接进行比较，判断是否值得花时间遍历这个page，达到加速的效果</p>
+<blockquote>
+<p>比如现在我们有如下数据，我们要执行<code>select * from table where val &gt; 600</code>，DBMS拿到了查询指令和Zone Map进行比较，发现这个page的MAX值为400，显然整个page的数据都是我们不需要的，那么直接跳过这个page即可</p>
+</blockquote>
+</li>
+</ol>
+<h2 id="Index-Scan"><a href="#Index-Scan" class="headerlink" title="Index Scan"></a>Index Scan</h2><p>由DBMS来选择一个index来查找tuple（13章会详细解释DBMS根据哪几个方面的来选择index）</p>
+<ul>
+<li>索引扫描又分为单索引扫描和多索引扫描（Multi-Index Scan），两者的区别和特点从名字就可以看出来，需要知道的是，多索引扫描会根据查询条件，在多个索引上查询结果并且将结果集合做一个并集或者交集</li>
+</ul>
+<h1 id="Modification-Queries"><a href="#Modification-Queries" class="headerlink" title="Modification Queries"></a>Modification Queries</h1><p>负责修改数据库中的表以及相关索引的操作称为修改查询，这些查询的输出可以是数据记录的id，也可以是tuple（比如returning）</p>
+<p>这里首先介绍了Halloween Problem（万圣节难题）：</p>
+<p>譬如在火山模型的数据库中执行更新操作<code>update people set salary = salary + 100 where salary &lt; 1100</code>的时候，会首先根据index，调用Next（）查找出来目标tuple，删除、重新赋值、插入，由此完成更新</p>
+<p>然而如果有一个tuple为：（Andy，999），在被更新之后会变成（andy，1099），此时这个tuple的物理位置已经改变，很有可能会被插入到原本位置之后，并且依然满足salary &lt; 1100的条件，所以会被第二次进行更新，变为（Andy，1199），这并不符合我们更新操作的目的</p>
+<p>解决办法就是：跟踪所有修改过的记录id</p>
+<h1 id="Expression-Evaluation"><a href="#Expression-Evaluation" class="headerlink" title="Expression Evaluation"></a>Expression Evaluation</h1><p>对于Where子句，DBMS会将其表示为一棵表达式树（expression tree），树中的不同结点代表不同的表达式类型例如：比较、析取、连接、算术运算符、常值、元祖属性引用等</p>
+<p>还介绍了Prepare子句，类似于函数的功能</p>
+<p>这一部分感觉就是普通的介绍，没有做很深入的讲解，看看就行</p>
+<h1 id="Scheduler"><a href="#Scheduler" class="headerlink" title="Scheduler"></a>Scheduler</h1><p>迄今为止我们所讨论的内容几乎都是基于数据流的角度来看待查询处理模型的，控制流以隐式的形式藏在一系列的查询操作中</p>
+<p>而有了scheduler（调度器），我们就可以显式地明确控制流了</p>
+<blockquote>
+<p>以下是个人理解：</p>
+<p>面向数据流是一件很复杂的事情，因为你没有办法非常细致地划分数据。比如人脑是没有办法清晰地认知：这一团数据是从哪里来的、要对它做什么、要把它发到哪里去之类的问题</p>
+<p>但是面向控制流就会让上述的事情变得很简单明了，是一种抽象程度更高的方法，此外可能对于分布式存储的系统更加友好？因为可以将每一个控制任务push或者pull到远程主机做处理然后再传输回来，比单纯发送数据的方式封装程度更高？</p>
+</blockquote>
+<hr>
+<h1 id="Parallel-x2F-Distributed"><a href="#Parallel-x2F-Distributed" class="headerlink" title="Parallel &#x2F; Distributed"></a>Parallel &#x2F; Distributed</h1><p>首先需要区分并行数据库和分布式数据库：</p>
+<ul>
+<li><p>首先需要明确的是，对于用户而言，两者是一样的，即对于某个查询返回某种结果，区别在于其内部设计</p>
+</li>
+<li><p>Parallel DBMSs：</p>
+<ul>
+<li>结点资源在物理上离得很近</li>
+<li>结点资源通过高速互联进行通信</li>
+<li>通信开销小并且是可靠的</li>
+</ul>
+</li>
+<li><p>Distributed DBMSs：</p>
+<ul>
+<li>结点资源之间的物理位置相距远</li>
+<li>结点资源通过低速互联进行通信</li>
+<li>无法忽视结点之间的通信开销</li>
+</ul>
+</li>
+</ul>
+<h1 id="Process-Model"><a href="#Process-Model" class="headerlink" title="Process Model"></a>Process Model</h1><p>过程模型定义了系统将为何种架构以处理并发的请求&#x2F;查询，其中，Worker负责执行一个单独的任务并且返回结果，是DBMS中的一个组件</p>
+<p>而模型的不同点就在于Worker的形式</p>
+<h2 id="Process-per-Worker"><a href="#Process-per-Worker" class="headerlink" title="Process per Worker"></a>Process per Worker</h2><p>第一种形式是进程模型：给每一个Worker都分配一个进程，由OS负责调度，对于一个查询中的每一个operator，都交给一个Worker来负责执行</p>
+<p>在线程的思想流行之前诞生的很多数据库都是用了这种模型</p>
+<p>优点是：其中一个进程的崩溃并不会影响整个系统的崩溃</p>
+<p>缺点是：极度依赖OS的调度，DBMS没有办法做到自行调度工作</p>
+<h2 id="Thread-per-Worker"><a href="#Thread-per-Worker" class="headerlink" title="Thread per Worker"></a>Thread per Worker</h2><p>第二种是线程模型：以线程的形式管理每一个Worker，是如今常用的数据库并行处理模型，DBMS能够主动控制线程的调度，调度算法能够更加灵活</p>
+<p>线程相对于进程的区别，即为线程模型相对于进程模型的优点和缺点——减少了进程带来的上下文切换、相比创建&#x2F;销毁一个进程，创建&#x2F;销毁一个线程的开销更小、不用管理公共内存；与此同时，一个线程的崩溃也会导致整个系统的崩溃</p>
+<blockquote>
+<p>关于Scheduling</p>
+<p>对于每一个查询计划，DBMS都要决定执行的时间、地点和方式</p>
+<p>需要考虑这个查询需要用到多少个Worker？需要用多少个CPU？这个查询需要在哪个CPU上处理？输出要保存在哪里？等等问题</p>
+<p>因此DBMS知道的内容（比如上下文相关的信息）总是要比OS多一些</p>
+</blockquote>
+<h2 id="Embedded-DBMS"><a href="#Embedded-DBMS" class="headerlink" title="Embedded DBMS"></a>Embedded DBMS</h2><p>最后一种方式是嵌入式，DBMS与应用程序运行在同一地址空间，由应用程序来负责线程和调度（这一部分没怎么看懂）</p>
+<h1 id="Inter-VS-Intra-Query-Parallelism"><a href="#Inter-VS-Intra-Query-Parallelism" class="headerlink" title="Inter- VS. Intra-Query Parallelism"></a>Inter- VS. Intra-Query Parallelism</h1><p>这里提出了两种并行化的思想的大概内容，姑且将其翻译为查询内并行性和查询间并行性</p>
+<h2 id="Inter-Query"><a href="#Inter-Query" class="headerlink" title="Inter-Query"></a>Inter-Query</h2><p>查询内并行性通过允许多个查询同时进行从而提高整体性能</p>
+<p>如果查询都是只读的，那么没有必要显式地协调查询与查询之间的先后，必要时，buffer pool可以处理大部分共享</p>
+<p>然而如果有多个查询在同时更新数据库，那么将会很难保持正确性，这个问题会在Lecture 15讨论事务相关内容的时候提及</p>
+<h2 id="Intra-Query"><a href="#Intra-Query" class="headerlink" title="Intra-Query"></a>Intra-Query</h2><p>通过并行执行运算符来提高单个查询的性能，在组织操作符的时候可以参考生产者&#x2F;消费者模型</p>
+<p>每一个operator都有一个并行化的版本</p>
+<p>这样可以让多个线程访问集中式的数据结构，也或者使用分区来分工合作</p>
+<p>其中操作又可以被划分为横向并行和纵向并行</p>
+<h3 id="Horizontal"><a href="#Horizontal" class="headerlink" title="Horizontal"></a>Horizontal</h3><p>横向并行，也可以称为操作内并行，将运算符分解为独立的片段，这些片段在不同的数据子集中执行相同的功能</p>
+<p>DBMS在查询计划中插入一个exchange操作符，用来合并&#x2F;拆分多个子操作符&#x2F;父操作符的结果</p>
+<p>即把一个操作分配给多个Worker，每个Worker都执行一部分，最终用exchange算子对结果进行合并</p>
+<h4 id="Exchange-Operator"><a href="#Exchange-Operator" class="headerlink" title="Exchange Operator"></a>Exchange Operator</h4><p>exchange算子有三种类型：</p>
+<ul>
+<li><p>Gather：</p>
+<p>从多个Worker处得到结果，进行合并之后作为一个单独的输出传递给上游</p>
+</li>
+<li><p>Distribute：</p>
+<p>将一个单独的输入分裂成多个输出传递给上游</p>
+</li>
+<li><p>Repartition：</p>
+<p>将多个输入重新分组成多个输出传递给上游</p>
+</li>
+</ul>
+<h3 id="Vertical"><a href="#Vertical" class="headerlink" title="Vertical"></a>Vertical</h3><p>纵向并行，思想类似于CPU的流水线，在运行一个操作的同时，另一个操作也在准备运行，一旦操作1处理完了一道数据就马上发给下一个操作2，因此不会出现类似于物化模型那样一次性传递一个数组的数据的情况</p>
+<h2 id="Bushy-Parallelism"><a href="#Bushy-Parallelism" class="headerlink" title="Bushy Parallelism"></a>Bushy Parallelism</h2><p>Inter和Intra-Parallelism的结合，上下游之间的不同部分都可以被划分成一个个独立的部分交给一个或几个Worker来处理</p>
+<h1 id="I-x2F-O-Parallelism"><a href="#I-x2F-O-Parallelism" class="headerlink" title="I&#x2F;O Parallelism"></a>I&#x2F;O Parallelism</h1><p>前面从过程模型的角度，介绍了基于并行查询的操作并行性。这里介绍了I&#x2F;O并行，是一种更加底层的并行方式</p>
+<p>对于单设备来说，I&#x2F;O始终是DBMS的瓶颈，如果能够把I&#x2F;O任务分配到多个设备中并行处理，那么就能够一定程度上突破这个瓶颈</p>
+<p>相关的方法有很多，这里主要介绍了两种：Multi-Disk Parallelism和Database Partitioning</p>
+<h2 id="Multi-Disk-Parallelism"><a href="#Multi-Disk-Parallelism" class="headerlink" title="Multi-Disk Parallelism"></a>Multi-Disk Parallelism</h2><p>即数据库文件分布在多个磁盘进行存储</p>
+<p>多磁盘并行主要考虑三方面因素：Performance、Durability、Capacity</p>
+<ul>
+<li><p>如果是基于硬件实现的多磁盘并行化：</p>
+<p>硬件控制器需要能够支持管理多个设备：例如现在有1～6号page，3个磁盘，那么控制器需要将page按照顺序分配给每个磁盘；或者将每一个page都复制3份到不同的磁盘上</p>
+</li>
+<li><p>如果是基于软件实现的多磁盘并行化：</p>
+<p>需要在文件&#x2F;对象的级别上使用擦除码，相较于传统的基于硬件实现，更加高效灵活（这一部分没怎么听懂）</p>
+</li>
+</ul>
+<p>无论基于哪种方法实现，数据交换的过程对于DBMS都是透明的</p>
+<h2 id="Database-Partitioning"><a href="#Database-Partitioning" class="headerlink" title="Database Partitioning"></a>Database Partitioning</h2><p>将数据库本身拆分成多个不相交的子集，进行分布式存储，这对于应用层而言是透明的</p>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-11/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -1278,87 +1501,6 @@
   
   
 
-      
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2023/06/22/%E8%87%AA%E6%88%91%E5%89%96%E6%9E%90%E6%8A%A5%E5%91%8A/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/NiJiKa.GIF">
-      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
-      <meta itemprop="description" content="琐碎和思考的堆放处">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="CigaCase">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          
-            <a href="/2023/06/22/%E8%87%AA%E6%88%91%E5%89%96%E6%9E%90%E6%8A%A5%E5%91%8A/" class="post-title-link" itemprop="url">自我剖析报告</a>
-        </h2>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-calendar"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-              
-
-              <time title="创建时间：2023-06-22 19:42:38 / 修改时间：21:12:37" itemprop="dateCreated datePublished" datetime="2023-06-22T19:42:38+08:00">2023-06-22</time>
-            </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-folder"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/%E7%A2%8E%E7%A2%8E%E5%BF%B5/" itemprop="url" rel="index"><span itemprop="name">碎碎念</span></a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>从外婆家回去的路上，老妈和我谈起了一件家里的琐事——“你外婆啊，真的是很不讲理……”具体内容已经无关紧要了，我也并没有放在心上，只不过老妈说到一半差点没有绷住自己的眼泪，可以看得出她们母女二人之间的确存在着很大的矛盾<br>听完之后我沉默良久，脑海中的一个念头弹了出来，于是整个思维都被这个念头占据</p>
-<blockquote>
-<p>我能够好好地长大成人真是不容易，我的性格在这种环境下还能如此温良真是不容易<br>但是<br>真的是这样吗？</p>
-</blockquote>
-<p>母亲在半路上改变主意，打算和父亲一起去朋友家玩，我于是能够独自回家<br>在路上我始终在剖析自己的心理，越想越觉得自己的心理是扭曲的<br>我暂时不知应该从何处讲起，那就先简单说说我的童年吧</p>
-<p>自打我有记忆开始，大概是幼儿园之前吧，就是外婆照顾的我。她教我识字、吃饭，带我去大润发的儿童乐园玩滑滑梯，给我买喜欢的玩具，领着我吃我当时最喜欢的肯德基。如果当时让我给家里人排名打分，外婆是毫无疑问的第一名。她精明能干，无微不至，就像超人一样……总之，她真的是一个很好的人——仅限于我、以及她平日里偶尔说说话的朋友<br>但她的耐心和大部分的爱似乎只给了我和我的表妹，她的慷慨分享给了与她素昧平生的外人，而蛮横和愤怒几乎都留给了家人和她自己，她对于家人的苛刻超乎了我的想象。早在我记事之前，她大抵和我爸因为某件事情吵得不可开交，受到了她的影响，再加上当时老爸严厉的育儿策略，导致我也曾用“老棺材”这样难听的称呼来指代老爸<br>后来我开始上小学，回到了自己家里居住，逐渐能够分清是非，开始接触到家庭内部的矛盾，我才明白：原来那个超人一般的外婆，并没有我想象中完美；相反，在家人眼中，她是一个蛮不讲理的、斤斤计较的人。如果不是她的咄咄逼人，老爸和外婆家的关系不会直接决裂，甚至连带着与母亲的娘家一起闹掰<br>我现在依然记得自己上小学之前、从外婆家搬回自己家的那个夜晚，自己坐在车上难过了许久，一想到自己不能住在外婆家，就好像要死掉了一样。现在回头看看，如果我在外婆家成长、接受她为人处事的潜移默化的熏陶，那我现在肯定已经成了一个孤僻又难搞的怪人，不得不说当时父母把我接回家教育真是明智之举</p>
-<p>当然了，我自己家的家庭环境也并非什么善茬：我爷爷走得早，父亲的原生家庭也因此出现很大的变故，他对我的教育是打压式的，是冷漠的，导致我年幼的时候对他非常害怕，程度之深，甚至当时看到他就要绕着道走，每次看到他在书房，我都不敢进去，生怕惹到他；另一方面，母亲弱势温良的性格使得她与我一同成为了家里较为弱势的一方——这对我的影响很深，或许我不喜欢与人争斗的性格也是拜她所赐——父亲又因为事业、以及与娘家之间的关系，和我母亲闹得不愉快，其中包含大量的冷暴力、PUA，以及少部分的摔家具（当然，热暴力是没有的）<br>虽然我时常会从一些朋友那里听到他们父母对他们过于严格的约束，而我对此总会拍着胸脯对他们说：“你爸妈应该送来我家，看看什么叫开明的家长。”但我心里清楚，在这个家里长大的我虽然不能说是不幸的，但也绝非幸运的</p>
-<p>似乎有些扯远了，总之，简单了解了我的家庭之后你或许就会明白，我为什么会说“我能够好好地长大成人真是不容易”这句话了<br>就在这样的背景下，我成为了一个扭曲的人</p>
-<p>我在今天之前一直认为，自己的原生家庭虽有矛盾，但是总体来说瑕不掩瑜，今天仔细审视一下，发现这简直就是满目疮痍；我曾一直认为，自己的心理、性格是十分健康的，比我的家人们要好很多，但现在我觉得也不尽如此</p>
-<p>我总是很愤怒：我的愤怒在于，我不理解他人为什么会为了一些细枝末节的琐事争执；我不理解为什么他人会自以为是趾高气昂地指着别人的不幸所导致的后果说三道四；我不理解为什么他们为什么不能够相互理解<br>我总是很谨慎：我的谨慎在于，我不懂得如何用正确的态度回应他人的善意，于是哪怕在说出一句感谢之前我总是要做足思想准备；我不懂得怎样才能让身边的人都放下情绪和睦相处，所以做出每一个举动之前我都要考虑再三会不会引人不快<br>我总是很悲伤：我的悲伤在于，我总觉得没有人会喜欢撕下面具之后自卑又自大的我；我总觉得，身边的不幸接踵而至，连带着我和我在乎的人一起卷入漩涡；我总觉得，自己能够因为恨而逃离原生家庭的魔咒，但他们对我无私的爱总是让我无法割舍</p>
-<p>我活得小心翼翼，因为我明白自己是一个一点就爆的炸药桶，所以我和大部分人都有意保持距离，只有为数不多的一两个人能够让我对他们敞开心扉，但即使是那一两个人，我也不曾和他们提起过今天写在这里的这些话语<br>这样的疏远刻入骨髓，哪怕我现在谈了恋爱，哪怕女朋友真的很喜欢我，对我真的很好，我也只不过觉得要尽可能陪陪她，而没有过要对她掏心掏肺地聊聊自己的想法，就好像只是在照顾一个认识了很多年的邻家妹妹</p>
-<p>我经常和人开玩笑说自己是一个情绪稳定的人，碰到不开心的事情总是自己憋着，然后就想要睡觉，一觉醒来，什么事情都没有了</p>
-<p>其实是假的，我的愤怒我的谨慎我的悲伤不可能从虚无中来，又在没有任何处理的情况下重归虚无。那些说出来怕伤到别人的带刺的不堪入目的话，我并非没有说出，只不过是像回旋镖一样，朝着空无一人的地方丢过去，然后再过不久飞回来打中自己了而已</p>
-<p>在我的生命中不乏善待我的人，其中也有无条件付出自己的爱的人，我很感激他们，真的<br>如果不是他们，我看到的世界会更加阴湿<br>我怀着愧疚，然后装作坦然地接受他们的爱，成为一个更加矛盾的人</p>
-
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
 
   
   <nav class="pagination">
@@ -1430,7 +1572,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">23</span>
+          <span class="site-state-item-count">24</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
