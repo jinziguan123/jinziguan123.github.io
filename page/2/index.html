@@ -159,6 +159,169 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2024/02/29/CMU15-445-2022Fall-Lecture-14/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/NiJiKa.GIF">
+      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
+      <meta itemprop="description" content="琐碎和思考的堆放处">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="CigaCase">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2024/02/29/CMU15-445-2022Fall-Lecture-14/" class="post-title-link" itemprop="url">CMU15-445 2022Fall Lecture 14</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2024-02-29 12:22:46 / 修改时间：12:25:04" itemprop="dateCreated datePublished" datetime="2024-02-29T12:22:46+08:00">2024-02-29</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h1 id="Lecture-14-Query-Planning-amp-Optimization"><a href="#Lecture-14-Query-Planning-amp-Optimization" class="headerlink" title="Lecture 14: Query Planning &amp; Optimization"></a>Lecture 14: Query Planning &amp; Optimization</h1><p>主要讲了查询的规划以及优化</p>
+<p>SQL查询在不同的规划下会有显著的性能上的差异，在先前介绍Join的那一章课已经提到过了</p>
+<h1 id="Query-Optimization-Techniques"><a href="#Query-Optimization-Techniques" class="headerlink" title="Query Optimization Techniques"></a>Query Optimization Techniques</h1><p>需要注意的是，决定优化的方式、规模与执行查询一样是需要占用时间的，所以查询的优化不在于要做到极致（Query Optimization是一个NP-Hard问题），而是在可能的几个计划之中选取折中的一个</p>
+<ul>
+<li><p>Heuristics&#x2F;Rules：</p>
+<ul>
+<li><p>Rewrite the query to remove stupid&#x2F;inefficient things</p>
+</li>
+<li><p>Does not require a cost model</p>
+</li>
+</ul>
+</li>
+<li><p>Cost-based Search</p>
+<ul>
+<li>Use a cost model to evaluate multiple equivalent plans and pick the one with the lowest cost</li>
+</ul>
+</li>
+</ul>
+<h2 id="Logical-VS-Physical-Plans"><a href="#Logical-VS-Physical-Plans" class="headerlink" title="Logical VS. Physical Plans"></a>Logical VS. Physical Plans</h2><p>其实优化查询无非两个步骤：在逻辑上对操作对象进行编排（比如是Join(A,B)还是Join(B,A)，是否要下移谓词等等）、要选择用哪种方式来优化（比如对于nested loop join，是否要更换为nested index join，sort+limit是否要更换为topn算法等等），这就是所谓的逻辑计划与物理计划</p>
+<h2 id="Heuristics-x2F-Rules"><a href="#Heuristics-x2F-Rules" class="headerlink" title="Heuristics&#x2F;Rules"></a>Heuristics&#x2F;Rules</h2><p>如果两个关系代数表达式 (Relational Algebra Expressions) 如果能产生相同的 tuple 集合，我们就称二者等价。DBMS 可以通过一些 Heuristics&#x2F;Rules 来将关系几何表达式转化成成本更低的等价表达式，从而达到查询优化的目的。这些规则通常试用于所有查询，如：</p>
+<ul>
+<li>Predicate Pushdown</li>
+<li>Projections Pushdown</li>
+</ul>
+<h3 id="Predicate-Pushdown"><a href="#Predicate-Pushdown" class="headerlink" title="Predicate Pushdown"></a>Predicate Pushdown</h3><p>Predicate 通常有很高的选择性，可以过滤掉许多无用的数据。将 Predicate 推到查询计划的底部，可以在查询开始时就更多地过滤数据</p>
+<p>核心思想如下：</p>
+<ul>
+<li>越早过滤越多数据越好</li>
+<li>重排 predicates，使得选择性大的排前面</li>
+<li>将复杂的 predicate 拆分，然后往下压，如 <code>X=Y AND Y=3</code> 可以修改成 <code>X=3 AND Y=3</code></li>
+</ul>
+<h3 id="Replace-Cartesian-Product"><a href="#Replace-Cartesian-Product" class="headerlink" title="Replace Cartesian Product"></a>Replace Cartesian Product</h3><p>将笛卡尔积替换成Join，不多赘述</p>
+<h3 id="Projections-Pushdown"><a href="#Projections-Pushdown" class="headerlink" title="Projections Pushdown"></a>Projections Pushdown</h3><p>在行存储数据库中，越早过滤掉不用的字段越好，因此将 Projections 操作往查询计划底部推也能够缩小中间结果占用的空间大小</p>
+<p><strong>需要注意的是这种方法对于列存储数据库是不管用的</strong></p>
+<h2 id="Cost-based-Search"><a href="#Cost-based-Search" class="headerlink" title="Cost-based Search"></a>Cost-based Search</h2><p>除了 Predicates 和 Projections 以外，许多操作没有通用的规则，如 Join：Join 操作既符合交换律又符合结合律，等价关系代数表达式数量庞大，这时候就需要一些成本估算技术，将过滤性大的表作为 Outer Table，小的作为 Inner Table，从而达到查询优化的目的</p>
+<p>由于需要遍历各种类型的plan来决定最终的选择，所以这里可以简单划分成三种类型的plan：</p>
+<ul>
+<li>Single relation</li>
+<li>Multiple relations</li>
+<li>Nested sub-queries</li>
+</ul>
+<h3 id="Single-relation-Query-Planning"><a href="#Single-relation-Query-Planning" class="headerlink" title="Single relation Query Planning"></a>Single relation Query Planning</h3><p>对于这类查找，只需要用简单的启发式方法譬如顺序扫描、二分搜索、索引扫描等就够用了</p>
+<p>具体来说就是将查询拆分成若干个小块，为每一块都生成一个逻辑运算符，为每一个逻辑运算符都生成一组物理运算符，然后依次迭代构建一棵left-deep join tree（就是类似于哈夫曼树一样的结构，两个节点由join作为父节点），这样可以最小化工作量</p>
+<p>这里直接去看课上那个Artist、Album、Appears的例子更加直观，整个搜索的过程就是在不断地[枚举、计算代价]</p>
+<h3 id="Multi-relation-Query-Planning"><a href="#Multi-relation-Query-Planning" class="headerlink" title="Multi-relation Query Planning"></a>Multi-relation Query Planning</h3><p>又分为自顶向下与自底向上两种优化方式，这里重点讲了自顶向下的思路</p>
+<blockquote>
+<p> 比如一个操作的目标是<code>A join B join C</code>，这是我们的目标，也是优化的根节点。接下来需要考虑有哪些方法可以得到这个根节点，比如可以选择<code>Hash_Join(A join B, C)</code>或者<code>SM_Join(A join B, C)</code>两者之间选择一个代价更小的（这里假设hash join代价更小），然后继续决策有哪些方法可以得到hash join这个节点</p>
+</blockquote>
+<h3 id="Nested-Sub-Queries"><a href="#Nested-Sub-Queries" class="headerlink" title="Nested Sub-Queries"></a>Nested Sub-Queries</h3><p>有的时候一个查询的嵌套太深，如果对于每一个嵌套都分别优化，而没有一个整体的优化方向的话，最终会导致计划十分低效。因此可以考虑将一个嵌套查询扁平化，或者至少减少其嵌套层数，尽可能水平展开</p>
+<p>这就延伸出了两种方法：</p>
+<ul>
+<li>重写查询，降低语句之间的关联性或者将其扁平化</li>
+<li>分解嵌套查询，将其结果保存在临时的表中</li>
+</ul>
+<h4 id="Rewrite"><a href="#Rewrite" class="headerlink" title="Rewrite"></a>Rewrite</h4><p>直接举个例子</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">select name from sailors as s</span><br><span class="line">	where exists(</span><br><span class="line">		select * from reservers as r</span><br><span class="line">  		where s.sid = r.sid</span><br><span class="line">  		and r.day = &#x27;2022.1.1&#x27;</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<p>可以被改写成</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">select name from sailors as s, reservers as r</span><br><span class="line">	where s.sid = r.sid </span><br><span class="line">		and r.day = &#x27;2022.1.1&#x27;</span><br></pre></td></tr></table></figure>
+
+<h4 id="Decomposing-Queries"><a href="#Decomposing-Queries" class="headerlink" title="Decomposing Queries"></a>Decomposing Queries</h4><p>同样举个例子</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">SELECT S.sid, MIN(R.day)</span><br><span class="line"> 	FROM sailors S, reserves R, boats B</span><br><span class="line">		WHERE S.sid = R.sid</span><br><span class="line"> 			AND R.bid = B.bid</span><br><span class="line"> 			AND B.color = &#x27;red&#x27;</span><br><span class="line"> 			AND S.rating = (SELECT MAX(S2.rating)</span><br><span class="line"> 		FROM sailors S2)</span><br><span class="line">	GROUP BY S.sid</span><br><span class="line">		HAVING COUNT(*) &gt; 1</span><br></pre></td></tr></table></figure>
+
+<p>可以改写成</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">SELECT MAX(rating) FROM sailors</span><br><span class="line"></span><br><span class="line">SELECT S.sid, MIN(R.day)</span><br><span class="line"> 	FROM sailors S, reserves R, boats B</span><br><span class="line">		WHERE S.sid = R.sid</span><br><span class="line"> 			AND R.bid = B.bid</span><br><span class="line"> 			AND B.color = &#x27;red&#x27;</span><br><span class="line"> 			AND S.rating = (SELECT MAX(S2.rating)</span><br><span class="line"> 		FROM sailors S2)</span><br><span class="line">	GROUP BY S.sid</span><br><span class="line">		HAVING COUNT(*) &gt; 1</span><br></pre></td></tr></table></figure>
+
+<p>毕竟<code>(SELECT MAX(S2.rating)</code>对于整个查询来说只是一个常量</p>
+<h3 id="Cost-Estimation"><a href="#Cost-Estimation" class="headerlink" title="Cost Estimation"></a>Cost Estimation</h3><p>一个查询需要花费多长时间，取决于许多因素 </p>
+<ul>
+<li>CPU: Small cost; tough to estimate</li>
+<li>Disk: #block transfers</li>
+<li>Memory: Amount of DRAM used</li>
+<li>Network: #messages</li>
+</ul>
+<p>但本质上取决于：<strong>整个查询过程需要读入和写出多少 tuples</strong></p>
+<p>因此 DBMS 需要保存每个 table 的一些统计信息，如 attributes、indexes 等信息，有助于估计查询成本。值得一提的是，不同的 DBMS 的搜集、更新统计信息的策略不同</p>
+<h3 id="Statistics"><a href="#Statistics" class="headerlink" title="Statistics"></a>Statistics</h3><p>对于任意table R，DBMS都保存了关于R的一些相关信息比如：</p>
+<ul>
+<li>$$N_{R}$$：R中tuple的数量</li>
+<li>$$V(A, R)$$：R中A属性的不同取值的个数</li>
+<li>$$A_{max}, A_{min}$$：A属性的最大值和最小值</li>
+</ul>
+<p>利用上面这些数据可以得到R中A属性的每一个值所对应的平均记录个数<br>$$<br>SC(A, R) &#x3D;N_R &#x2F; V(A, R)<br>$$<br>利用以上信息，就可以针对不同的predicate，预估不同的selectivity：</p>
+<ul>
+<li>Equality</li>
+<li>Range</li>
+<li>Negation</li>
+<li>Conjunction</li>
+<li>Disjunction</li>
+</ul>
+<h4 id="Equality-Predicate"><a href="#Equality-Predicate" class="headerlink" title="Equality Predicate"></a>Equality Predicate</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">select * from people where age = 2</span><br></pre></td></tr></table></figure>
+
+<p>假设people中有5个人，所有的age一共有5个取值，则$$N_R$$&#x3D;5，$$V(age, people)$$&#x3D;5：<br>$$<br>sel(A &#x3D; constant) &#x3D; SC(P) &#x2F; V(A, R) &#x3D; \frac{1}{5}<br>$$</p>
+<h4 id="Range-Predicate"><a href="#Range-Predicate" class="headerlink" title="Range Predicate"></a>Range Predicate</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">select * from people where age &gt;= 2</span><br></pre></td></tr></table></figure>
+
+<p>则可以利用最大值最小值来估计：<br>$$<br>sel(A &gt;&#x3D; a) &#x3D; (A_{max} - a) &#x2F; (A_{max} - A_{min})<br>$$</p>
+<h4 id="Negation-Predicate"><a href="#Negation-Predicate" class="headerlink" title="Negation Predicate"></a>Negation Predicate</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">select * from people where age != 2</span><br></pre></td></tr></table></figure>
+
+<p>其实就是Equality Predicate取个补集<br>$$<br>sel(not P) &#x3D; 1 - sel(P) &#x3D; 1 - SC(age &#x3D; 2) &#x3D; \frac{4}{5}<br>$$</p>
+<h4 id="Conjunc-Predicate"><a href="#Conjunc-Predicate" class="headerlink" title="Conjunc Predicate"></a>Conjunc Predicate</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">select * from people </span><br><span class="line">	where age = 2</span><br><span class="line">		and name like &#x27;A%&#x27;</span><br></pre></td></tr></table></figure>
+
+<p>如果两个predicate是相互独立的话<br>$$<br>sel(P1 \bigwedge P2) &#x3D; sel(P1) \times sel(P2)<br>$$</p>
+<h4 id="Disjunction-Predicate"><a href="#Disjunction-Predicate" class="headerlink" title="Disjunction Predicate"></a>Disjunction Predicate</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">select * from people </span><br><span class="line">	where age = 2</span><br><span class="line">		or name like &#x27;A%&#x27;</span><br></pre></td></tr></table></figure>
+
+<p>如果两个predicate相互独立，则有：<br>$$<br>sel(P1 \bigvee P2) &#x3D; sel(P1) + sel(P2) - sel(P1 \bigwedge P2) &#x3D; sel(P1) + sel(P2) - sel(P1) \times sel(P2)<br>$$</p>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-12-13/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -1423,84 +1586,6 @@
   
   
 
-      
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2023/07/02/%E4%B8%AD%E5%9B%BD%E4%BA%BA%E8%A2%AB%E5%BD%A2%E5%BC%8F%E4%B8%BB%E4%B9%89PUA%E7%9A%84%E4%B8%80%E7%94%9F/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/NiJiKa.GIF">
-      <meta itemprop="name" content="愚者大人的铁质卷烟盒">
-      <meta itemprop="description" content="琐碎和思考的堆放处">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="CigaCase">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          
-            <a href="/2023/07/02/%E4%B8%AD%E5%9B%BD%E4%BA%BA%E8%A2%AB%E5%BD%A2%E5%BC%8F%E4%B8%BB%E4%B9%89PUA%E7%9A%84%E4%B8%80%E7%94%9F/" class="post-title-link" itemprop="url">中国人被形式主义PUA的一生</a>
-        </h2>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-calendar"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-
-              <time title="创建时间：2023-07-02 15:35:38" itemprop="dateCreated datePublished" datetime="2023-07-02T15:35:38+08:00">2023-07-02</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="far fa-calendar-check"></i>
-                </span>
-                <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2023-07-07 23:18:39" itemprop="dateModified" datetime="2023-07-07T23:18:39+08:00">2023-07-07</time>
-              </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-folder"></i>
-              </span>
-              <span class="post-meta-item-text">分类于</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/%E7%A2%8E%E7%A2%8E%E5%BF%B5/" itemprop="url" rel="index"><span itemprop="name">碎碎念</span></a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>当我在室外集合，撑着把伞也阻止不了自己半个身子的衣服都被打个湿透的时候；当我坐在体育馆里，听着他们鼓动我们喊出足够刷新羞耻心下限的口号的时候；当我为了所谓“仪式”的排练，在座位上不断站起来又坐下的时候<br>我惊奇地发现自己其实已经没有感到愤怒的动力了</p>
-<blockquote>
-<p>“军训是人生中重要的一课，训过一次就能受益良久……”<br>“我代表xxx，向xxx宣战”<br>“不要害怕吃苦，吃苦是福……”</p>
-</blockquote>
-<p>诸如此类的话，过去的我能从脑子里面一秒调出来三句反驳的句子，能从几个方面来据理力争，莫名的灼热能从胃里翻涌到脑袋，再途径咽喉直达嘴巴一吐为快<br>但我现在觉得没必要了<br>哪怕他们不开口，我也知道他们会说些什么<br>哪怕他们光坐着，我也知道这个会场在接下来的一两个小时会发生什么<br>重复度高达99%的事件一遍又一遍地重演，追根溯源甚至连脚后跟落下连带溅起的尘埃都那么相似，连通知公告字里行间的臭味都高度一致，在我人生过去的十九年里以不同的面貌、不同的声音、不同的视角演出相同的戏码，奏着相同的乐曲，导向相同的结局<br>所以没有必要浪费精力去听、去骂、去愤怒<br>名为形式主义的糟粕在过去，在现在，也会在未来</p>
-
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
 
   
   <nav class="pagination">
@@ -1572,7 +1657,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">24</span>
+          <span class="site-state-item-count">25</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1620,7 +1705,7 @@
 <div class="copyright">
   
   &copy; 
-  <span itemprop="copyrightYear">2024</span>
+  <span itemprop="copyrightYear">2025</span>
   <span class="with-love">
     <i class="fa fa-heart"></i>
   </span>
