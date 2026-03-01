@@ -40,7 +40,7 @@ external_link:
   exclude: ''
 filename_case: 0
 render_drafts: false
-post_asset_folder: false
+post_asset_folder: true
 relative_link: false
 future: true
 highlight:
@@ -102,7 +102,6 @@ theme: next
 # Deployment
 ## Docs: https://hexo.io/docs/one-command-deployment
 deploy:
-  deploy:
   type: git
-  repository: https://github.com/jinziguan123/jinziguan123.github.io.git  #你的仓库地址
+  repository: git@github.com:jinziguan123/jinziguan123.github.io.git
   branch: main
