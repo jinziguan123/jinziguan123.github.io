@@ -22,20 +22,19 @@
     var CONFIG = {"hostname":"example.com","root":"/","scheme":"Muse","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
   </script>
 
-  <meta name="description" content="Lecture 9: Index Concurrency Control本章主要介绍了数据库中几种闩锁的概念和简单的实现（非代码） Locks vs. Latches lock 保护当前事务的索引内容不会受到其他事务的影响 lock在整个事务的执行期间都会被持有 DBMS需要在发生冲突的时候回滚变更   latch 保护索引内部数据不会被其他线程影响 仅在线程对索引进行某个操作的时刻被持有（一般持">
+  <meta name="description" content="“哎你的那个高中同学，现在这个形势还要出国留学啊？留在国内多好……” “读研留学，最终为的是什么？不都为了找个好工作嘛……” “这是没有「意义」的事情……”  没有意义就是最大的意义 当周围的人质疑你的行动，嘲讽的你的规划，不解你的思考 你终于明白肩上负担的是独属于自己的行囊，脑海盘旋着的是世间无二的音符 他们知道这没有意义，你知道这没有意义，所以这就是意义 人们为世界上的一切事物、人类的一切言">
 <meta property="og:type" content="article">
-<meta property="og:title" content="CMU15-445 2022Fall Lecture 9">
-<meta property="og:url" content="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-9/index.html">
+<meta property="og:title" content="意义">
+<meta property="og:url" content="http://example.com/2025/02/12/%E6%84%8F%E4%B9%89/index.html">
 <meta property="og:site_name" content="CigaCase">
-<meta property="og:description" content="Lecture 9: Index Concurrency Control本章主要介绍了数据库中几种闩锁的概念和简单的实现（非代码） Locks vs. Latches lock 保护当前事务的索引内容不会受到其他事务的影响 lock在整个事务的执行期间都会被持有 DBMS需要在发生冲突的时候回滚变更   latch 保护索引内部数据不会被其他线程影响 仅在线程对索引进行某个操作的时刻被持有（一般持">
+<meta property="og:description" content="“哎你的那个高中同学，现在这个形势还要出国留学啊？留在国内多好……” “读研留学，最终为的是什么？不都为了找个好工作嘛……” “这是没有「意义」的事情……”  没有意义就是最大的意义 当周围的人质疑你的行动，嘲讽的你的规划，不解你的思考 你终于明白肩上负担的是独属于自己的行囊，脑海盘旋着的是世间无二的音符 他们知道这没有意义，你知道这没有意义，所以这就是意义 人们为世界上的一切事物、人类的一切言">
 <meta property="og:locale" content="zh_CN">
-<meta property="article:published_time" content="2024-02-28T04:48:06.000Z">
-<meta property="article:modified_time" content="2024-02-28T05:00:12.375Z">
+<meta property="article:published_time" content="2025-02-12T12:33:56.000Z">
+<meta property="article:modified_time" content="2025-11-24T13:15:36.770Z">
 <meta property="article:author" content="愚者大人的铁质卷烟盒">
-<meta property="article:tag" content="CMU15-445">
 <meta name="twitter:card" content="summary">
 
-<link rel="canonical" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-9/">
+<link rel="canonical" href="http://example.com/2025/02/12/%E6%84%8F%E4%B9%89/">
 
 
 <script id="page-configurations">
@@ -48,7 +47,7 @@
   };
 </script>
 
-  <title>CMU15-445 2022Fall Lecture 9 | CigaCase</title>
+  <title>意义 | CigaCase</title>
   
 
 
@@ -163,7 +162,7 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2024/02/28/CMU15-445-2022Fall-Lecture-9/">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2025/02/12/%E6%84%8F%E4%B9%89/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="image" content="/images/NiJiKa.GIF">
@@ -176,7 +175,7 @@
     </span>
       <header class="post-header">
         <h1 class="post-title" itemprop="name headline">
-          CMU15-445 2022Fall Lecture 9
+          意义
         </h1>
 
         <div class="post-meta">
@@ -185,17 +184,23 @@
                 <i class="far fa-calendar"></i>
               </span>
               <span class="post-meta-item-text">发表于</span>
-              
 
-              <time title="创建时间：2024-02-28 12:48:06 / 修改时间：13:00:12" itemprop="dateCreated datePublished" datetime="2024-02-28T12:48:06+08:00">2024-02-28</time>
+              <time title="创建时间：2025-02-12 20:33:56" itemprop="dateCreated datePublished" datetime="2025-02-12T20:33:56+08:00">2025-02-12</time>
             </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="far fa-calendar-check"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2025-11-24 21:15:36" itemprop="dateModified" datetime="2025-11-24T21:15:36+08:00">2025-11-24</time>
+              </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
                 <i class="far fa-folder"></i>
               </span>
               <span class="post-meta-item-text">分类于</span>
                 <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/%E7%AC%94%E8%AE%B0/" itemprop="url" rel="index"><span itemprop="name">笔记</span></a>
+                  <a href="/categories/%E7%A2%8E%E7%A2%8E%E5%BF%B5/" itemprop="url" rel="index"><span itemprop="name">碎碎念</span></a>
                 </span>
             </span>
 
@@ -217,87 +222,30 @@
     <div class="post-body" itemprop="articleBody">
 
       
-        <h1 id="Lecture-9-Index-Concurrency-Control"><a href="#Lecture-9-Index-Concurrency-Control" class="headerlink" title="Lecture 9: Index Concurrency Control"></a>Lecture 9: Index Concurrency Control</h1><p>本章主要介绍了数据库中几种闩锁的概念和简单的实现（非代码）</p>
-<h1 id="Locks-vs-Latches"><a href="#Locks-vs-Latches" class="headerlink" title="Locks vs. Latches"></a>Locks vs. Latches</h1><ul>
-<li>lock<ol>
-<li>保护当前事务的索引内容不会受到其他事务的影响</li>
-<li>lock在整个事务的执行期间都会被持有</li>
-<li>DBMS需要在发生冲突的时候回滚变更</li>
-</ol>
-</li>
-<li>latch<ol>
-<li>保护索引内部数据不会被其他线程影响</li>
-<li>仅在线程对索引进行某个操作的时刻被持有（一般持有时间很短）</li>
-<li>DBMS不需要对数据的更新进行回滚</li>
-<li>latch有两种mode，分别为Read Mode和Write Mode，其中Read Mode可以同时被多个线程持有，但Write Mode不行</li>
-</ol>
-</li>
-</ul>
-<h1 id="Latch-Implementation"><a href="#Latch-Implementation" class="headerlink" title="Latch Implementation"></a>Latch Implementation</h1><h2 id="Blocking-OS-Mutex"><a href="#Blocking-OS-Mutex" class="headerlink" title="Blocking OS Mutex"></a>Blocking OS Mutex</h2><ul>
-<li>依赖OS内置的互斥机制，由<strong>用户空间的自旋latch</strong>以及<strong>OS的互斥锁</strong>组成。当DBMS无法获得用户空间的latch时，会试图进入内核态并获取更加昂贵的mutex，如果还是无法获取，则会被阻塞</li>
-<li>OS mutex在DBMS中不是一个好的选择，因为会被OS介入，而且开销比较大<ul>
-<li>例子：std::mutex  </li>
-<li>优点：使用简单</li>
-<li>缺点：消耗大，不可扩展</li>
-</ul>
-</li>
-</ul>
-<h2 id="Test-and-Set-Spin-Latch-TAS"><a href="#Test-and-Set-Spin-Latch-TAS" class="headerlink" title="Test-and-Set Spin Latch(TAS)"></a>Test-and-Set Spin Latch(TAS)</h2><ul>
-<li>自旋锁比mutex更有效，因为DBMS可以控制自旋锁在无法获取latch的情况下的下一步动作：比如可以继续尝试获取或者允许OS取消调度<ul>
-<li>例子：std::atomic&lt;T&gt;</li>
-<li>优点：上锁更高效，一个<code>std::atomic_flag latch</code>指令即可上锁</li>
-<li>缺点：没有扩展性，对于cache和OS并不友好</li>
-</ul>
-</li>
-</ul>
-<h2 id="Reader-Writer-Latches"><a href="#Reader-Writer-Latches" class="headerlink" title="Reader-Writer Latches"></a>Reader-Writer Latches</h2><ul>
-<li>mutex和自旋锁并不区分读写（对于数据库而言是不好的），DBMS需要一种可以支持并发读取的方法，这样如果程序有大量读取的需求就可以获得更好的效果</li>
-<li>读写锁允许latch以read或者write的mode进行等待，可以跟踪有多少线程持有该latch，以及有多少线程在等待获取latch。对于read锁，我们可以定义其在任何情况下都可以获得这把latch，也可以指定其只有在等待write的线程为空的时候才能获取；对于write锁，则需要等待read锁被全部释放<ul>
-<li>例子：std::shared_mutex</li>
-<li>优点：能够并发读取</li>
-<li>缺点：必须要额外维护两个队列：read线程和write线程以防止饥饿现象，内存开销会更大</li>
-</ul>
-</li>
-</ul>
-<h1 id="Hash-Table-Latching"><a href="#Hash-Table-Latching" class="headerlink" title="Hash Table Latching"></a>Hash Table Latching</h1><ul>
-<li>由于Hash数据结构本身的特性，所有线程在访问的时候都是按照顺序自上而下的，每次也都只会访问一个slot，因此不会出现死锁现象</li>
-<li>按照粒度的大小，Hash Table Latching可以被分成两种：<ul>
-<li>Page Latches：每个Page都用一把大锁锁住，每个线程在访问Page之前获取一个Read或者Write锁，这样的做法会降低程序的并发性，但是由于线程访问每个slot的速度很快，因为只需要一把锁即可实现</li>
-<li>Slot Latches：Page中的每个slot都有自己的锁，所以读写线程可以同时访问一个Page的不同slot，提高了并发度，但同时也增加了存储和计算开销</li>
-</ul>
-</li>
-</ul>
-<h1 id="B-Tree-Latching"><a href="#B-Tree-Latching" class="headerlink" title="B+ Tree Latching"></a>B+ Tree Latching</h1><ul>
-<li>B+树的锁主要为了防止以下问题：<ul>
-<li>不同线程同时修改同一个结点</li>
-<li>当一个线程对结点进行插入&#x2F;删除，导致结点出现了split&#x2F;merge现象时，另一个线程正在遍历树</li>
-</ul>
-</li>
-<li>Latch Crabbing&#x2F;Couping Protocol（锁存耦合协议）允许多个线程并发访问B+树，具体规则如下：<ul>
-<li>获取父节点锁</li>
-<li>获取子结点锁</li>
-<li>如果子结点被认为是安全的（不会发生split、merge、再分配），则释放父节点的锁</li>
-</ul>
-</li>
-<li>Basic Latch Crabbing Protocol<ul>
-<li>Search：从根结点开始向下，获取子结点锁-&gt;释放父节点锁，重复此步骤</li>
-<li>Insert&#x2F;Delete：从根结点向下按需获取x个结点的latch，一旦孩子结点被锁住了，检查是否安全，如果安全，则释放所有祖先的锁</li>
-<li>释放锁的顺序在逻辑上不重要，然而在现实中越靠近根结点的锁需要更先释放，否则会造成性能的下降</li>
-</ul>
-</li>
-<li>Better Latch Crabbing Protocol：<ul>
-<li>在改进的算法中，每一个线程都会默认到达目标结点的路径是安全的，并且以不断抓去Read锁的形式来到达，最终检验是否安全。如果不安全，则停止操作，重新开始，只不过重新遍历会抓去Write锁</li>
-<li>Search：与朴素的算法一致</li>
-<li><strong>Insert&#x2F;Delete</strong>：跟Search一样，不断获取和释放READ latch。最后在叶子结点上设置WRITE latch。如果叶子不安全，则重来，这次用基本算法的思路</li>
-</ul>
-</li>
-<li>Leaf Node Scan<ul>
-<li>前两种算法都是自上而下的，线程无法获取更上一层的锁存器，因此不会出现死锁现象</li>
-<li>然而扫描叶子结点的时候很容易出现死锁，当两个线程以相反的方向遍历到了相邻的叶子结点，就会出现死锁，而Index Latch本身并不支持死锁的检测和预防</li>
-<li>因为，唯一能够解决这个问题的方式就是通过code discipline，叶子结点的兄弟结点的锁存器必须遵循“no wait”原则。B+树必须面对锁存器获取失败的情况，一般会选择终止操作，重新启动</li>
-</ul>
-</li>
-</ul>
+        <blockquote>
+<p>“哎你的那个高中同学，现在这个形势还要出国留学啊？留在国内多好……”</p>
+<p>“读研留学，最终为的是什么？不都为了找个好工作嘛……”</p>
+<p>“这是没有「意义」的事情……”</p>
+</blockquote>
+<p>没有意义就是最大的意义</p>
+<p>当周围的人质疑你的行动，嘲讽的你的规划，不解你的思考</p>
+<p>你终于明白肩上负担的是独属于自己的行囊，脑海盘旋着的是世间无二的音符</p>
+<p>他们知道这没有意义，你知道这没有意义，所以这就是意义</p>
+<p>人们为世界上的一切事物、人类的一切言行冠以「意义」，因为那是面临虚无的唯一解药</p>
+<p>于是「意义」出现在了各种场合，被人从背后推着，不分青红皂白地为台上的丑角正名</p>
+<p>“我的生命是多么的出彩，我的人生是多么的令人眼红，和随处可见的杂草完全不同！”</p>
+<p>但</p>
+<p>人类不在乎，银河不在乎，宇宙不在乎</p>
+<p>这个世界并没有一本厚厚的日记本来记录下每个人一生的轨迹</p>
+<p>等他死了钉上棺材板，便开始向所有人歌颂他的丰功伟绩直到宇宙寂灭</p>
+<p>你说</p>
+<p>“我能让所有人长生不老”</p>
+<p>他说</p>
+<p>“我能让全人类衣食无忧”</p>
+<p>多么伟大，然后呢？</p>
+<p>在那之后出生的人们</p>
+<p>无非是将这翻天覆地之后的世界</p>
+<p>视作上帝理所应当的造物</p>
 
     </div>
 
@@ -306,9 +254,6 @@
     
 
       <footer class="post-footer">
-          <div class="post-tags">
-              <a href="/tags/CMU15-445/" rel="tag"># CMU15-445</a>
-          </div>
 
         
 
@@ -316,12 +261,12 @@
         
     <div class="post-nav">
       <div class="post-nav-item">
-    <a href="/2024/02/28/CMU15-445-2022Fall-Lecture-6/" rel="prev" title="CMU15-445 2022Fall Lecture 6">
-      <i class="fa fa-chevron-left"></i> CMU15-445 2022Fall Lecture 6
+    <a href="/2025/01/18/%E6%AE%8B%E5%8F%B6/" rel="prev" title="残叶">
+      <i class="fa fa-chevron-left"></i> 残叶
     </a></div>
       <div class="post-nav-item">
-    <a href="/2024/02/28/CMU15-445-2022Fall-Lecture-10/" rel="next" title="CMU15-445 2022Fall Lecture 10">
-      CMU15-445 2022Fall Lecture 10 <i class="fa fa-chevron-right"></i>
+    <a href="/2025/11/24/%E7%A9%BA%E5%BF%83%E4%BA%BA/" rel="next" title="空心人">
+      空心人 <i class="fa fa-chevron-right"></i>
     </a></div>
     </div>
       </footer>
@@ -386,7 +331,6 @@
 
       <!--noindex-->
       <div class="post-toc-wrap sidebar-panel">
-          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Lecture-9-Index-Concurrency-Control"><span class="nav-number">1.</span> <span class="nav-text">Lecture 9: Index Concurrency Control</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Locks-vs-Latches"><span class="nav-number">2.</span> <span class="nav-text">Locks vs. Latches</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Latch-Implementation"><span class="nav-number">3.</span> <span class="nav-text">Latch Implementation</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Blocking-OS-Mutex"><span class="nav-number">3.1.</span> <span class="nav-text">Blocking OS Mutex</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Test-and-Set-Spin-Latch-TAS"><span class="nav-number">3.2.</span> <span class="nav-text">Test-and-Set Spin Latch(TAS)</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Reader-Writer-Latches"><span class="nav-number">3.3.</span> <span class="nav-text">Reader-Writer Latches</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Hash-Table-Latching"><span class="nav-number">4.</span> <span class="nav-text">Hash Table Latching</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#B-Tree-Latching"><span class="nav-number">5.</span> <span class="nav-text">B+ Tree Latching</span></a></li></ol></div>
       </div>
       <!--/noindex-->
 
